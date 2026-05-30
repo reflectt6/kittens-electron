@@ -1,6 +1,6 @@
 {
   "name": "kittens-game",
-  "version": "1.5.0.2",
+  "version": "1.5.2",
   "description": "Kittens Game - Desktop Edition",
   "main": "main.js",
   "author": "bloodrizer (original game), Desktop port",

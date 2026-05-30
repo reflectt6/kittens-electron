@@ -9,9 +9,10 @@ Kittens Game - Desktop Edition. An Electron 33 wrapper around the web-based incr
 ## Commands
 
 ```bash
-npm start          # Run the Electron app (dev)
-npm run build      # Build portable Windows .exe via electron-builder
-npm run build:dir  # Build unpacked Windows directory
+npm install       # Install dependencies
+npm start         # Run the Electron app (dev)
+npm run build     # Build portable Windows .exe via electron-builder → dist/
+npm run build:dir # Build unpacked Windows directory
 ```
 
 There are no tests or linters in this project.
@@ -20,8 +21,52 @@ There are no tests or linters in this project.
 
 ### Electron shell (thin layer)
 
-- **`main.js`** — Main process. Creates the BrowserWindow, builds the native menu (Game/View/Help), and registers IPC handlers for file-based save/load. Saves are stored in `%APPDATA%/kittens-game/saves/`. On window close, shows a "Save & Quit" dialog that calls into the game's `saveToFile()` via `executeJavaScript`.
+- **`main.js`** — Main process. Creates the BrowserWindow (1280×860, min 650×500), builds the native menu (Game/View/Help), and registers IPC handlers for file-based save/load. Saves are stored in `%APPDATA%/kittens-game/saves/`. On window close, shows a "Save & Quit" dialog that calls into the game's `saveToFile()` via `executeJavaScript`.
 - **`preload.js`** — Context bridge. Exposes `window.electronAPI` (with `saveGameFile`, `loadLatestSave`, `listSaves`, `loadSaveFile`) to the renderer. Uses `contextIsolation: true`, `nodeIntegration: false`.
+
+### Layout system (`app/res/default.css`)
+
+The UI uses a flexbox-based responsive three-column layout:
+
+- **`#gamePageContainer`** — Root flex container (`flex-direction: column; height: 100vh`). Contains `#topBar` + `#game`.
+- **`#topBar`** — Fixed height (28px), `flex-shrink: 0`. Contains game title, toolbar icons (happiness, energy, pollution, login), and action links (Save, Restore, Options, etc.).
+- **`#game`** — `flex: 1` fills remaining space. Horizontal flex row containing the three columns + toggleCenter.
+- **Three columns**: `#leftColumn` (flex: 1 1 280px), `#midColumn` (flex: 2 1 400px), `#rightColumn` (flex: 1 1 250px). All have `min-height: 0` + `overflow-y: auto` for independent scrolling. No `height: 100%` — flex `align-items: stretch` handles height.
+- **Responsive breakpoints** (always keep 3 columns, never collapse):
+  - ≤1100px: narrower side columns, smaller buttons (210px)
+  - ≤850px: further compressed, padding halved, footer hidden
+  - ≤700px: near-minimum (left 150px, mid 220px, right 150px), content scrolls within columns
+
+### Theme system
+
+Themes are CSS files under `app/res/theme_<name>.css`. Each theme uses the `.scheme_<name>` class prefix to scope its rules. Body gets `class="scheme_<name>"` set by `ui.js#updateOptions()`.
+
+**How themes are loaded:**
+1. `default.css` is loaded first (base styles, CSS variables, layout).
+2. In `index.html`, the saved theme (or default "night") is applied via `$("body").addClass("scheme_<name>")` and `loadTheme()`.
+3. All theme CSS files are preloaded via `loadTheme()` in the config import callback — the `scheme_<name>` body class controls which one is active.
+
+**Available themes (28 total):** night (default), dark, grassy, sleek, black, wood, bluish, grayish, greenish, tombstone, spooky, gold, space, school, fluid, vessel, minimalist, oil, unicorn, anthracite, chocolate, vintage, computer, arctic, cyber, factory, catnip, dune.
+
+**Default themes** (always unlocked): night, dark, grassy, sleek, black, wood, bluish, grayish, greenish, tombstone, spooky.
+
+**Theme configuration:**
+- `app/config.js` — `KGConfig.statics.schemes` (all) and `defaultSchemes` (unlocked by default).
+- `app/js/ui.js#DesktopUI` — `defaultSchemes`/`allSchemes` arrays, `updateOptions()` applies the body class, `unlockScheme()`/`relockSchemes()` for scheme management.
+- `app/game.js` — `colorScheme` field (default `"night"`), `toggleScheme()`, save/load persistence.
+- `app/index.html` — Defaults to "night" theme on first run. Language defaults to `zh`.
+
+**Creating a new theme:**
+1. Create `app/res/theme_<name>.css` with `.scheme_<name>` prefixed rules.
+2. Add `"<name>"` to `schemes` and `defaultSchemes` arrays in `app/config.js`.
+3. Add `"opts.theme.<name>": "显示名称"` to `app/res/i18n/zh.json` and `en.json`.
+
+### Login / KGNet UI
+
+- **`app/js/jsx/toolbar.jsx.js`** — `WLogin` and `WLoginForm` React components. Rendered in the top toolbar.
+- Login popup (`.login-popup`) is absolutely positioned relative to `.toolbarIcon` (which has `position: relative`). Centered via `left: 50%; transform: translateX(-50%)`.
+- Popup contains: last backup info, email/password form, cloud save management.
+- Styled in `default.css` (light) and `theme_night.css` (dark).
 
 ### Game engine (renderer process)
 
@@ -30,7 +75,7 @@ All game code lives under `app/`. The game loads via SystemJS dynamic module imp
 **Entry point and bootstrap (`app/index.html`):**
 1. Loads third-party libs via `<script>` tags (React, jQuery, Dojo, LZ-String, Dropbox, MD5, SystemJS)
 2. Sets default language to `zh` (Chinese) in localStorage
-3. Loads theme CSS based on saved UI settings
+3. Applies saved theme or defaults to "night"
 4. Fetches `build.version.json` to get build revision
 5. Imports `config.js` then `i18n.js`, then `core.js`, then all game modules in dependency order
 6. Calls `initGame()` which instantiates `gamePage` (the global game singleton) and starts the main loop
@@ -73,12 +118,12 @@ Each file implements one manager, all namespaced under `classes.managers.*`. The
 React components for the main UI panels. Rendered via React (included as `react.min.js`):
 - `left.jsx.js` — Left column (building list)
 - `mid.jsx.js` — Center column (main game view)
-- `toolbar.jsx.js` — Top toolbar with tab navigation
+- `toolbar.jsx.js` — Top toolbar with tab navigation, login form, cloud saves
 - `chiral.jsx.js` — Chiral/cloud save panel
 - `queue.jsx.js` — Crafting queue panel
 
 **Config and i18n:**
-- `app/config.js` — `KGConfig`: available locales (`zh`, `zht`), 27 color schemes (10 default, 17 unlockable), notation types
+- `app/config.js` — `KGConfig`: available locales (`zh`, `zht`), 28 color schemes, notation types
 - `app/i18n.js` — `com.nuclearunicorn.i18n.Lang`: loads locale JSON from `app/res/i18n/`, provides `$I()` for translation keys
 - `app/server.json` — Server-side configuration (MOTD, telemetry endpoint)
 
@@ -97,4 +142,4 @@ Dojo Toolkit (dojo.xd.js — used for `dojo.declare` class system, `dojo.hitch`,
 
 ### Version and build
 
-Version is `1.5.0.2` (displayed as `1.5.0.2.r{revision}`). Build revision is stored in `app/build.version.json`. The version string `1502` is hardcoded in `index.html` as the `version` variable and checked for auto-update in `server.json`.
+Package version is `1.5.2` (must be valid 3-part semver for electron-builder). In-game displayed version is `1.5.0.2.r{revision}` (built from the `version` variable `"1502"` in `index.html` split by character). Build revision is stored in `app/build.version.json`.

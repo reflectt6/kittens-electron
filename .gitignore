@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 
+# Claude Code
+.claude/
+
 # OS files
 .DS_Store
 Thumbs.db
