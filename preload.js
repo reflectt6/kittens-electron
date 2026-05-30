@@ -1,9 +1,13 @@
 // Preload script - bridges Electron and the game
-// Exposes minimal safe APIs to the renderer process
-
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
-  isElectron: true
+  isElectron: true,
+
+  // File save
+  saveGameFile: (data) => ipcRenderer.invoke('save-game-file', data),
+  loadLatestSave: () => ipcRenderer.invoke('load-latest-save'),
+  listSaves: () => ipcRenderer.invoke('list-saves'),
+  loadSaveFile: (filename) => ipcRenderer.invoke('load-save-file', filename),
 });

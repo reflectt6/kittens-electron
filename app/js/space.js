@@ -171,8 +171,7 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 			{name: "thorium",   val: 35000}
 		],
 		unlocks: {
-			planet: ["charon"],
-			spaceMission: ["charonMission"]
+			planet: ["charon"]
 		}
 	},{
 		name: "centaurusSystemMission",
@@ -186,6 +185,7 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 			{name: "thorium",   val: 50000}
 		],
 		unlocks: {
+			challenges: ["energy"],
 			planet: ["centaurusSystem"],
 			spaceMission: ["furthestRingMission"]
 		}
@@ -258,6 +258,9 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
                 policies:["outerSpaceTreaty","militarizeSpace"]
             },
 			calculateEffects: function(self, game){
+				if (self.val > 0){
+					game.time.queue.unlockQueueSource("spaceBuilding");
+				}
                 var observatoryRatioTemp = 0.05 * (1 + game.getEffect("satelliteSynergyBonus"));
 				self.effects = {
 					"observatoryRatio": observatoryRatioTemp,
@@ -273,10 +276,16 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 				else {
 					self.effects["energyConsumption"] = 1;
 				}
-				// game.upgrade(self.upgrades); //this way observatories won't have to use action
+
+				game.upgrade(self.upgrades); //this way observatories won't have to use action
+
+				if (game.challenges.isActive("blackSky")) {
+					self.effects['starchartPerTickBaseSpace'] *= 1 / (1 + game.getEffect('bskSattelitePenalty'));
+				}
 			},
 			upgrades: {
-				buildings: ["observatory"]
+				buildings: ["observatory"],
+				challenges: ["blackSky"]
 			},
 			unlockScheme: {
 				name: "space",
@@ -312,7 +321,13 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 				tabs: ["village"]
 			},
 			breakIronWill: true
-		}]
+		}],
+
+		calculateEffects: function(self, game){
+			if (game.science.get("rocketry").researched){
+				game.time.queue.unlockQueueSource("spaceMission");
+			}
+		}
 	},{
 		name: "moon",
 		label: $I("space.planet.moon.label"),
@@ -384,15 +399,16 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 				"energyConsumption" : 0
 			},
 			calculateEffects: function(self, game){
+				var spaceportRatio = 1 + game.getEffect( "moonBaseStorageBonus" );
 				var effects = {
-					"catnipMax"         : 45000,
-					"woodMax"           : 25000,
-					"mineralsMax"       : 30000,
-					"coalMax"           : 3500,
-					"ironMax"           : 9000,
-					"titaniumMax"       : 1250,
-					"oilMax"            : 3500,
-					"unobtainiumMax"    : 150,
+					"catnipMax"         : 45000 * spaceportRatio,
+					"woodMax"           : 25000 * spaceportRatio,
+					"mineralsMax"       : 30000 * spaceportRatio,
+					"coalMax"           : 3500 * spaceportRatio,
+					"ironMax"           : 9000 * spaceportRatio,
+					"titaniumMax"       : 1250 * spaceportRatio,
+					"oilMax"            : 3500 * spaceportRatio,
+					"unobtainiumMax"    : 150 * spaceportRatio,
 					"energyConsumption" : 0
 				};
 				effects["energyConsumption"] = game.workshop.get("amBases").researched ? 5 : 10;
@@ -431,7 +447,7 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 			calculateEffects: function (self, game){
 				self.effects = {
 					"uraniumPerTickSpace" : 0.3 * (1 + game.getEffect("crackerRatio")),
-					"uraniumMax" : 1750
+					"uraniumMax" : 1750 * (1 + game.getEffect("planetCrackerStorageBonus"))
 				};
 			}
         },{
@@ -652,16 +668,17 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 				"unobtainiumMax": 0
 			},
             calculateEffects: function(self, game){
+				var ratio = 1 + game.getEffect("cryostationStorageBonus");
 				self.effects = {
-					"woodMax"       : 200000,
-					"mineralsMax"   : 200000,
-					"coalMax"       : 25000,
-					"ironMax"       : 50000,
-					"titaniumMax"   : 7500,
-					//"oilMax"        : 25000,
-					"oilMax"        : 7500,
-					"uraniumMax"    : 5000,
-					"unobtainiumMax": 750
+					"woodMax"       : 200000 * ratio,
+					"mineralsMax"   : 200000 * ratio,
+					"coalMax"       : 25000 * ratio,
+					"ironMax"       : 50000 * ratio,
+					"titaniumMax"   : 7500 * ratio,
+					//"oilMax"        : 25000 * ratio,
+					"oilMax"        : 7500 * ratio,
+					"uraniumMax"    : 5000 * ratio,
+					"unobtainiumMax": 750 * ratio
 				};
             },
 			unlockScheme: {
@@ -734,8 +751,11 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 				effects: {
 					"maxKittens": 1
 				},
-				action: function(self, game) {
+				updateEffects: function(self, game) {
 					self.effects["maxKittens"] = 1 + game.getEffect("terraformingMaxKittensRatio");
+				},
+				action: function(self, game) {
+					self.updateEffects(self, game);
 				},
 				unlocks: {
 					tabs: ["village"]
@@ -879,6 +899,14 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 						self.effects["hashRateLevel"] = 0;
 					}
 					self.effects["gflopsConsumption"] = 0.1;
+
+					//Hide all hash-related things from the tooltip if we don't have any hashes:
+					if (hr == 0) {
+						self.effects["hashrate"] = 0;
+						self.effects["nextHashLevelAt"] = 0;
+						self.effects["hrProgress"] = 0;
+						self.effects["hashRateLevel"] = 0;
+					}
 				}
 			}
 		]
@@ -948,6 +976,15 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 				if (!building.effects){
 					return 0;
 				} else {
+					//There are 4 specially calculated effects that aren't supposed to be multiplied by the number of buildings,
+					//because they're properties of the building category as a whole, not any individual building.
+					if (effectName === "hashrate" || effectName === "hashRateLevel" ||
+					    effectName === "nextHashLevelAt" || effectName === "hrProgress")
+					{
+						//For these 4 specially calculated effects, don't multiply by building.on and don't apply spaceRatio.
+						return building.effects[effectName];
+					}
+					//Else, this isn't one of the special effects, so compute it normally.
 					var spaceRatio = (effectName == "spaceRatio" && game.resPool.energyCons > game.resPool.energyProd) ? game.resPool.getEnergyDelta() : 1;
 					return building.effects[effectName] * building.on * spaceRatio;
 				}
@@ -1058,6 +1095,7 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 				} else {
 					planet.routeDays = 0;
 					planet.reached = true;
+					this.game.time.queue.unlockQueueSource("spaceBuilding");
 					this.game.msg($I("space.newplanet.log.msg"), "important");
 				}
 			}
@@ -1080,7 +1118,7 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 					}
 				}
 
-				if (bld.action && bld.val > 0){
+				if (bld.action && (bld.val > 0 || bld.name == "entangler")){ //Entanglers need to update hashrate level if we import a save that has 0 of them
 					var amt = bld.action(bld, this.game);
 					if (typeof(amt) != "undefined") {
 						bld.lackResConvert = amt != 1 && bld.on != 0;
@@ -1196,6 +1234,48 @@ dojo.declare("classes.managers.SpaceManager", com.nuclearunicorn.core.TabManager
 			this.programs[i].unlocked = true;
 		}
 		this.game.msg("All space upgrades are unlocked");
+	},
+	getEffect: function(effectName){
+		var effect = 0;
+		for (var i = 0; i < this.meta.length; i++){
+			var effectMeta = this.getMetaEffect(effectName, this.meta[i]);
+			effect += effectMeta;
+		}
+		return effect;
+	},
+
+	undo: function(data) {
+		if (data.action === "build") {
+			var bld = this.getBuilding(data.metaId);
+			var props = {
+				id:            bld.name,
+				name:           bld.label,
+				description:    bld.description,
+				building:       bld.name
+			};
+			props.controller = new classes.ui.space.PlanetBuildingBtnController(this.game);
+			var model = props.controller.fetchModel(props);
+			model.refundPercentage = 1.0;	//full refund for undo
+			props.controller.sellInternal(model, model.metadata.val - data.val, false /*requireSellLink*/);
+		} else if (data.action === "sell") {
+			var bld = this.getBuilding(data.metaId);
+			var props = {
+				id:            bld.name,
+				name:           bld.label,
+				description:    bld.description,
+				building:       bld.name
+			};
+			props.controller = new classes.ui.space.PlanetBuildingBtnController(this.game);
+			var model = props.controller.fetchModel(props);
+
+			//The meat of the function: un-sell the buildings.
+			//Since buildings are sold for a 50% refund, we need to un-refund everything
+			for (var i = 0; i < data.val; i += 1) {
+				props.controller.incrementValue(model);
+				props.controller.payPriceForUndoRefund(model);
+			}
+			this.game.render();
+		}
 	}
 });
 
@@ -1207,12 +1287,20 @@ dojo.declare("com.nuclearunicorn.game.ui.SpaceProgramBtnController", com.nuclear
         return model.metaCached;
     },
 
+	getType: function(){
+		return "spaceMission";
+	},
+
     getPrices: function(model) {
         var prices = dojo.clone(model.metadata.prices);
 
         for (var i = 0; i < prices.length; i++){
             if (prices[i].name == "oil"){
                 var reductionRatio = this.game.getLimitedDR(this.game.getEffect("oilReductionRatio"), 0.75);
+                prices[i].val *= (1 - reductionRatio);
+			}
+			if (prices[i].name == "manpower"){
+                var reductionRatio = this.game.getLimitedDR(this.game.getEffect("catpowerReductionRatio"), 0.75);
                 prices[i].val *= (1 - reductionRatio);
 			}
 		}
@@ -1245,6 +1333,15 @@ dojo.declare("com.nuclearunicorn.game.ui.SpaceProgramBtnController", com.nuclear
 		model.visible = meta.unlocked;
 	},
 
+	updateEnabled: function(model) {
+		var meta = model.metadata;
+		if (meta.val != 0 && meta.on == 0) { //This checks for if the mission is "in progress"
+			model.enabled = false;
+			return;
+		}
+		this.inherited(arguments);
+	},
+
 	getName: function(model){
 		var meta = model.metadata;
 
@@ -1257,11 +1354,14 @@ dojo.declare("com.nuclearunicorn.game.ui.SpaceProgramBtnController", com.nuclear
 		}
 	},
 
-	buyItem: function(model, event, callback) {
+	buyItem: function(model, event) {
 		if (model.metadata.val == 0) {
-			this.inherited(arguments);
+			return this.inherited(arguments);
 		} else {
-			callback(false);
+			return {
+				itemBought: false,
+				reason: "already-bought"
+			};
 		}
 	},
 
@@ -1284,6 +1384,10 @@ dojo.declare("classes.ui.space.PlanetBuildingBtnController", com.nuclearunicorn.
         }
         return model.metaCached;
     },
+
+	getType: function () {
+		return "spaceBuilding";
+	},
 
     hasSellLink: function(model){
 		return !this.game.opts.hideSell;
@@ -1318,6 +1422,32 @@ dojo.declare("classes.ui.space.PlanetBuildingBtnController", com.nuclearunicorn.
 		}
 
 		return prices;
+	},
+
+	build: function(model, opts) {
+		var counter = this.inherited(arguments);
+		if (!counter) {
+			return; //Skip undo if nothing was built
+		}
+		var undo = this.game.registerUndoChange();
+		undo.addEvent(this.game.space.id, {
+			action: "build",
+			metaId: model.metadata.name,
+			val: counter
+		}, $I("ui.undo.bld.build", [counter, model.metadata.label]));
+	},
+
+	sell: function(event, model){
+		var amtSold = this.inherited(arguments);
+
+		if (amtSold > 0) {
+			var undo = this.game.registerUndoChange();
+			undo.addEvent(this.game.space.id, {
+				action: "sell",
+				metaId: model.metadata.name,
+				val: amtSold
+			}, $I("ui.undo.bld.sell", [amtSold, model.metadata.label]));
+		}
 	}
 });
 
@@ -1342,7 +1472,7 @@ dojo.declare("classes.ui.space.PlanetPanel", com.nuclearunicorn.game.ui.Panel, {
 	update: function() {
 		if (!this.planet.reached && this.planet.unlocked && this.planet.routeDays > 0) {
 			var routeSpeed = this.game.getEffect("routeSpeed") != 0 ? this.game.getEffect("routeSpeed") : 1;
-			this.title.innerHTML = this.name + " | 还需: " + this.game.toDisplayDays(Math.round(this.planet.routeDays / routeSpeed));
+			this.title.innerHTML = this.name + " | ETA: " + this.game.toDisplayDays(Math.round(this.planet.routeDays / routeSpeed));
 		} else {
 			this.title.innerHTML = this.name;
 		}
@@ -1357,10 +1487,10 @@ dojo.declare("classes.ui.space.FurthestRingPanel", [classes.ui.space.PlanetPanel
 	},
 
 	render: function(container){
-		var wrapper = new mixin.IReactAware(WChiral, this.game);
+		//var wrapper = new mixin.IReactAware(WChiral, this.game);
 
 		var content = this.inherited(arguments);
-		wrapper.render(content);
+		//wrapper.render(content);
 
 		return content;
 	}

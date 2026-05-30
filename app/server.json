@@ -1,10 +1,10 @@
 {
   "donateAmt": 0,
 
-  "telemetryUrl": "",
+  "telemetryUrl": "http://coldseat.me:9091/events/",
   "telemetryAppId": "KG",
 
   "showMotd": true,
-  "motdTitle": "猫国建设者 桌面版",
-  "motdContent": "欢迎使用猫国建设者桌面版！<br>游戏存档保存在本地，请定期导出备份。<br>快捷键: Ctrl+S 保存 | Ctrl+E 导出 | Ctrl+I 导入"
+  "motdTitle": "MOTD",
+  "motdContent": "Praise the sun!"
 }

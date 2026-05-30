@@ -1,9 +1,9 @@
 {
-  "name": "kittens-game-desktop",
-  "version": "1.4.9.0",
-  "description": "猫国建设者 - Kittens Game 桌面版",
+  "name": "kittens-game",
+  "version": "1.5.0.2",
+  "description": "Kittens Game - Desktop Edition",
   "main": "main.js",
-  "author": "bloodrizer (原始游戏), 桌面版移植",
+  "author": "bloodrizer (original game), Desktop port",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.kittensgame.desktop",
-    "productName": "猫国建设者",
+    "productName": "Kittens Game",
     "directories": {
       "output": "dist"
     },

@@ -1,7 +1,8 @@
 /* global
     WLeftPanel
     WMidPanel
-    WToolbar
+    WToolbar,
+    WQueue
 */
 
 
@@ -25,7 +26,7 @@
     },
  */
 
-window.$r = React.createElement;
+var $r = React.createElement;
 dojo.declare("mixin.IReactAware", null, {
     component: null,
     container: null,
@@ -165,11 +166,9 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
     },
 
     isDisplayOver: false,
-    isChatActive: false,
-    isChatVisited: false,
     isCenter: false,
 
-    defaultSchemes: ["default", "dark", "grassy", "sleek", "black", "wood", "bluish", "grayish", "greenish", "tombstone", "spooky"],
+    defaultSchemes: ["default"].concat(new classes.KGConfig().statics.defaultSchemes),
     allSchemes: ["default"].concat(new classes.KGConfig().statics.schemes),
 
     dirtyComponents: [],
@@ -294,8 +293,11 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
                 }
             }
 
+            var targetType = event.target.type;
 			var isInputElement = event.target.tagName === "TEXTAREA" ||
-				(event.target.tagName === "INPUT" && (event.target.type === "text" || event.target.type === "number"));
+				(event.target.tagName === "INPUT" && (
+                    targetType === "text" || targetType === "number" || targetType === "password" || targetType === "email"
+                ));
             var isTabNumber = ((event.keyCode >= 48 && event.keyCode <= 57) || (event.keyCode >= 96 && event.keyCode <= 105));
             //console.log(isTabNumber, event.keyCode);
 
@@ -347,7 +349,19 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
     setGame: function(game){
         this.game = game;
 
-        //this.toolbar = new classes.ui.Toolbar(game);
+        //This tooltip needs to be created EXACTLY ONCE.
+        //(Calling it more than once would create performance issues because (in the current implementation) old event
+        // listeners don't ever get un-attached, which can cause noticeable lag when thousands of event listeners fire
+        // simultaneously.  Un-attaching event listeners is hard because we're implementing them using anonymous functions.)
+        //It needs to be created AFTER the game is created, so it can't happen in the DesktopUI#constructor.
+        UIUtils.attachTooltip(game, $("#undoBtn")[0], -30, -30, function() {
+            var undoState = game.undoChange;
+            if (undoState) {
+                return undoState.getEventDescription(undoState.events[0]);
+            }
+            //Else, undoState doesn't exist currently:
+            return "";
+        });
     },
 
     render: function(){
@@ -435,7 +449,7 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
 
 		if (!this.calenderDivTooltip){
             var calendarDiv = dojo.byId("calendarDiv");
-            this.calenderDivTooltip = UIUtils.attachTooltip(game, calendarDiv, 0, 320, dojo.hitch(game.calendar, function() {
+            this.calenderDivTooltip = UIUtils.attachTooltip(game, calendarDiv, 0, 200, dojo.hitch(game.calendar, function() {
                 var tooltip = "";
                 var displayThreshold = 100000;
                 if (this.year > displayThreshold) {
@@ -460,7 +474,7 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
 
 		if (!this.calendarSignSpanTooltip){
             var calendarSignSpan = dojo.byId("calendarSign");
-			this.calendarSignSpanTooltip = UIUtils.attachTooltip(game, calendarSignSpan, 0, 320, dojo.hitch(game.calendar, function() {
+			this.calendarSignSpanTooltip = UIUtils.attachTooltip(game, calendarSignSpan, 0, 60, dojo.hitch(game.calendar, function() {
                 var cycle = this.cycles[this.cycle];
                 if (!cycle) {
                     return "";
@@ -572,7 +586,7 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
         if (now.getDate() == 1 && now.getMonth() == 3) {
             $(".console-intro").css("font-size", "300%").addClass("blaze").text($I("console.intro.zebra"));
         } else {
-            $(".console-intro").text($I("console.intro"));
+            $(".console-intro").css("font-size", "100%").removeClass("blaze").text($I("console.intro"));
         }
 
         React.render($r(WLeftPanel, {
@@ -583,13 +597,15 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
             game: this.game
         }), document.getElementById("midColumnViewport"));
 
+        if (this.game.getFeatureFlag("QUEUE")){
+            React.render($r(WQueue, {
+                game: this.game
+            }), document.getElementById("queueViewport"));
+        }
+
         React.render($r(WToolbar, {
             game: this.game
         }), document.getElementById("headerToolbar"));
-
-        container = null;
-        scrollPosition = null;
-        midColumn = null;
     },
 
     //---------------------------------------------------------------
@@ -607,9 +623,6 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
         if (this.game.ticks % 5 == 0 && this.game.tooltipUpdateFunc) {
             this.game.tooltipUpdateFunc();
         }
-
-        //not relevant anymore
-        //$(".chatLink").css("font-weight", this.isChatVisited ? "normal" : "bold");
 
         //wat
         /*React.render($r(WLeftPanel, {
@@ -719,11 +732,12 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
     //--------------------------------------------
 
     updateUndoButton: function(){
-        var isVisible = (this.game.undoChange !== null);
+        var undoState = this.game.undoChange;
+        var isVisible = (undoState !== null);
         $("#undoBtn").toggle(isVisible);
 
         if (isVisible) {
-            $("#undoBtn").text($I("ui.undo", [Math.floor(this.game.undoChange.ttl / this.game.ticksPerSecond)]));
+            $("#undoBtn").text($I("ui.undo", [Math.floor(undoState.ttl / this.game.ticksPerSecond)]));
         }
     },
 
@@ -755,11 +769,9 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
             game.colorScheme = "default";
         }
         $("body").removeClass();
-        if (game.colorScheme != "default") {
-            $("body").addClass("scheme_" + game.colorScheme);
-            if (!game.opts.hideBGImage) {
-                $("body").addClass("with_background_image");
-            }
+        $("body").addClass("scheme_" + game.colorScheme);
+        if (!game.opts.hideBGImage) {
+            $("body").addClass("with_background_image");
         }
 
         if (game.opts.tooltipsInRightColumn) {
@@ -768,25 +780,10 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
             $("#tooltip").detach().appendTo("#game").removeClass("tooltip-in-right-column");
         }
 
-        $("#workersToggle")[0].checked = game.useWorkers;
-        $("#forceHighPrecision")[0].checked = game.opts.forceHighPrecision;
-        $("#usePerSecondValues")[0].checked = game.opts.usePerSecondValues;
-        $("#usePercentageResourceValues")[0].checked = game.opts.usePercentageResourceValues;
-        $("#showNonApplicableButtons")[0].checked = game.opts.showNonApplicableButtons;
-        $("#usePercentageConsumptionValues")[0].checked = game.opts.usePercentageConsumptionValues;
-        $("#highlightUnavailable")[0].checked = game.opts.highlightUnavailable;
-        $("#hideSell")[0].checked = game.opts.hideSell;
-        $("#hideDowngrade")[0].checked = game.opts.hideDowngrade;
-        $("#hideBGImage")[0].checked = game.opts.hideBGImage;
-        $("#tooltipsInRightColumn")[0].checked = game.opts.tooltipsInRightColumn;
-        $("#enableRedshift")[0].checked = game.opts.enableRedshift;
+        game.settingsTab.render($("#optionsDiv")[0]);
+
+        //The settingsTab above only handles boolean options; we must still handle non-booleans ourselves.
         $("#batchSize")[0].value = game.opts.batchSize;
-        $("#forceLZ")[0].checked = game.opts.forceLZ;
-        $("#compressSaveFile")[0].checked = game.opts.compressSaveFile;
-        $("#disableTelemetry")[0].checked = game.opts.disableTelemetry;
-        $("#noConfirm")[0].checked = game.opts.noConfirm;
-        $("#IWSmelter")[0].checked = game.opts.IWSmelter;
-        $('#autoSaveReset')[0].checked = game.opts.autoSaveReset;
 
         var selectedLang = i18nLang.getLanguage();
         var locales = i18nLang.getAvailableLocales();
@@ -873,39 +870,18 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
         $("#leftColumn").css("font-size", this.fontSize + "px");
     },
 
-    hideChat: function(){
+    loadLog: function(){ //actually loads log!
         $("#rightTabLog").show();
-        $("#IRCChatInner").css("visibility", "hidden");
         $("#logLink").toggleClass("active", true);
-        $("#chatLink").toggleClass("active", false);
-        $("#rightTabChat").hide();
+        $("#queueLink").toggleClass("active", false);
+        $("#rightTabQueue").hide();
     },
-
-    loadChat: function(){
-        $("#rightTabChat").show();
+    loadQueue: function(){
         $("#rightTabLog").hide();
-
+        $("#rightTabQueue").show();
         $("#logLink").toggleClass("active", false);
-        $("#chatLink").toggleClass("active", true);
-
-        $("#IRCChatInner").css("visibility", "visible");
-
-        if (this.isChatActive) {
-            return;
-        }
-
-        var height = $(window.top).height() || 850;
-        //console.log("IRC WINDOW HEIGHT:", height);
-
-        var $chat = $("#IRCChatInner iframe");
-        $chat.css("height", height - 180);
-
-        //swfobject.embedSWF("lib/lightirc/lightIRC.swf", $chat[0], 600, height - 150, 10, "lib/lightirc/expressInstall.swf", params);
-        /*<iframe src="https://kiwiirc.com/client/irc.canternet.org/?nick=kitten_?#kittensgame" style="border:0; width:100%; height:450px;"></iframe>*/
-        this.isChatActive = true;
-        //this.isChatVisited = true;
+        $("#queueLink").toggleClass("active", true);
     },
-
     resetConsole: function(){
         this.game.console.resetState();
     },
@@ -917,7 +893,9 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
         dojo.empty(filtersDiv);
         var show = false;
 
-        for (var fId in console.filters){
+        var filtersSorted = Object.keys(console.filters).sort();
+        for (var filterIndex in filtersSorted) {
+            var fId = filtersSorted[filterIndex];
             if (console.filters[fId].unlocked) {
                 this._createFilter(console.filters[fId], fId, filtersDiv);
                 show = true;
@@ -955,9 +933,11 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
         $("#autosaveTooltip").text($I("ui.autosave.tooltip"));
         $("#saveTooltip").text($I("ui.save.tooltip"));
         $("#logLink").text($I("ui.log.link"));
-        $("#chatLink").text($I("ui.chat.link"));
+        if (this.game.getFeatureFlag("QUEUE")){
+            $("#queueLink").text($I("ui.queue.link"));
+        }
         $("#clearLogHref").text($I("ui.clear.log"));
-        $("#logFiltersBlockText").html($I("ui.log.filters.block"));
+        $("#logFiltersBlockText").html("[<span id=\"filterIcon\">+</span>] " + $I("ui.log.filters.block")); //We don't want to have <span> tags inside the i18n text, so we'll move it here instead.
         $("#pauseBtn").text($I("ui.pause"));
         $("#pauseBtn").attr("title", $I("ui.pause.title"));
         $("#undoBtn").attr("title", $I("ui.undo.title"));
@@ -965,29 +945,12 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
         $("#optionLanguage").text($I("ui.option.language"));
         $("#addTranslationLink").text($I("ui.option.language.add"));
         $("#languageApplyLink").text($I("ui.option.language.apply"));
+        $("#optionNotation").text($I("ui.option.notation"));
         $("#optionScheme").text($I("ui.option.scheme"));
         $("#schemeRelock").text($I("ui.option.scheme.relock"));
         $("#schemeTip").text($I("ui.option.scheme.tip"));
-        $("#optionWorkers").html($I("ui.option.workers"));
-        $("#optionForceHighPrecision").text($I("ui.option.force.high.precision"));
-        $("#optionUsePerSecondValues").html($I("ui.option.use.per.second.values"));
-        $("#optionUsePercentageResourceValues").text($I("ui.option.use.percentage.resource.values"));
-        $("#optionShowNonApplicableButtons").text($I("ui.option.show.non.applicable.buttons"));
-        $("#optionUsePercentageConsumptionValues").text($I("ui.option.use.percentage.consumption.values"));
-        $("#optionHighlightUnavailable").text($I("ui.option.highlight.unavailable"));
-        $("#optionHideSell").text($I("ui.option.hide.sell"));
-        $("#optionHideDowngrade").text($I("ui.option.hide.downgrade"));
-        $("#optionHideBGImage").html($I("ui.option.hide.bgimage"));
-        $("#optionTooltipsInRightColumn").text($I("ui.option.tooltips.right"));
         $("#optionMore").text($I("ui.option.more"));
-        $("#optionNoConfirm").text($I("ui.option.no.confirm"));
-        $("#optionIWSmelter").text($I("ui.option.iw.smelter"));
-        $("#optionDisableTelemetry").text($I("ui.option.disable.telemetry"));
-        $("#optionEnableRedshift").text($I("ui.option.enable.redshift"));
-        $("#optionEnableRedshiftGflops").text($I("ui.option.enable.redshiftGflops"));
         $("#optionBatchSize").text($I("ui.option.batch.size"));
-        $("#optionForceLZ").html($I("ui.option.force.lz"));
-        $("#optionCompressSaveFile").html($I("ui.option.compress.savefile"));
         $("#exportButton").attr("value", $I("ui.option.export.button"));
         $("#importButton").attr("value", $I("ui.option.import.button"));
         $("#exportTo").text($I("ui.option.export"));
@@ -1002,11 +965,9 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
         $("#importFromText").text($I("ui.option.import.from.text"));
         $("#doImportButton").attr("value",$I("ui.option.do.import.button"));
         $("#cancelButton").attr("value",$I("ui.option.cancel.button"));
-        $("#appText").html($I("ui.option.app.text"));
+        $("#appText").text($I("ui.option.app.text"));
         $("#appAndroid").text($I("ui.option.app.android"));
         $("#appIOS").text($I("ui.option.app.ios"));
-        $("#optionNotation").text($I("ui.option.notation"));
-        $("#optionDisablePollution").text($I("ui.option.pollution"));
     },
 
     _createFilter: function(filter, fId, filtersDiv){
@@ -1035,33 +996,54 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
             messages = _console.messages;
 
         var gameLog = dojo.byId("gameLog");
-        if (!messages.length) { // micro optimization
+        if (messages.length === 0) {
             return;
         }
 
-        var msg = messages[messages.length - 1];
+        var messageLatest = messages[messages.length - 1];
+        var messagePrevious = 1 < messages.length ? messages[messages.length - 2] : null;
+        var insertDateHeader = !messagePrevious 
+            || messageLatest.year !== messagePrevious.year 
+            || messageLatest.seasonTitle !== messagePrevious.seasonTitle;
 
-        if (!msg.span) {
-            var span = dojo.create("span", {className: "msg" }, gameLog);
+        if (!messageLatest.span) {
+            var span = dojo.create("span", {className: "msg", innerHTML: messageLatest.text}, gameLog);
 
-            if (msg.type) {
-                dojo.addClass(span, "type_" + msg.type);
+            if (messageLatest.type) {
+                dojo.addClass(span, "type_" + messageLatest.type);
             }
-            if (msg.noBullet) {
+            if (messageLatest.noBullet) {
                 dojo.addClass(span, "noBullet");
             }
-            msg.span = span;
+            messageLatest.span = span;
         }
-        //Place date headers above actual log events.
-        if (msg.type === "date") {
-            dojo.place(msg.span, gameLog, "first");
-        } else {
-            dojo.place(msg.span, gameLog, 1);
+
+        if (insertDateHeader) {
+            //Calling msg will itself trigger another call to renderConsoleLog
+            if (!messageLatest.year || !messageLatest.seasonTitle) {
+                this.game.console.msg($I("ui.log.link"), "date", null, false);
+            } else {
+                this.game.console.msg($I("calendar.year.ext", [messageLatest.year, messageLatest.seasonTitle]), "date", null, false);
+            }
         }
-        dojo.attr(msg.span, {innerHTML: msg.text});
+
+        if (messageLatest.type === "date") {
+            dojo.place(messageLatest.span, gameLog, "first");
+            //Skip the housekeeping logic because the function-call stack contains
+            // another instance of renderConsoleLog that will take care of it for us.
+            //At the moment, the last message in the log is the one we wanted to create--
+            // it hasn't been dojo.place'd in its proper spot yet.
+            return;
+        }
+        //------------ else: non-date, non-header messages ------------
+
+        //Place current message immediately below the date header.
+        dojo.place(messageLatest.span, gameLog, 1);
+
         //Destroy child nodes if there are too many.
-        var logLength = dojo.byId("gameLog").childNodes.length;
-        if (logLength > _console.maxMessages) {dojo.destroy(dojo.byId("gameLog").childNodes[logLength - 1]);}
+        while (gameLog.childNodes.length > _console.maxMessages) {
+            dojo.destroy(gameLog.lastChild);
+        }
 
         //fade message spans as they get closer to being removed and replaced
         var spans = dojo.query("span", gameLog);
@@ -1093,8 +1075,13 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
         if (window.confirm(msg)) {
             callbackOk.apply(window);
         } else if (callbackCancel != undefined) {
-        	callbackCancel.apply(window);
+            callbackCancel.apply(window);
         }
+    },
+
+    prompt: function(title, defaultValue, callbackOk) {
+        var result = window.prompt(title, defaultValue);
+        callbackOk.call(window, result);
     },
 
     //TODO: add dialog and close/bind events
@@ -1128,13 +1115,12 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
 
         var uiData = LCstorage["com.nuclearunicorn.kittengame.ui"];
         try {
-            uiData = JSON.parse(uiData);
+            uiData = uiData ? JSON.parse(uiData) : {};
 
             this.fontSize = uiData.fontSize || 16;
-            this.isChatVisited = uiData.isChatVisited || false;
             this.isCenter = uiData.isCenter || false;
         } catch (ex) {
-            console.error("unable to load ui data");
+            console.error("unable to load ui data", ex);
         }
         this.updateFontSize();
         this.updateCenter();
@@ -1143,7 +1129,6 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
     save: function(){
         LCstorage["com.nuclearunicorn.kittengame.ui"] = JSON.stringify({
            fontSize: this.fontSize,
-           isChatVisited: this.isChatVisited,
            isCenter: this.isCenter,
            theme: this.game.colorScheme
         });
@@ -1152,10 +1137,12 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
     updateCenter: function(){
         if (this.isCenter) {
             $("#game").addClass("centered");
-            $("#toggleCenter").html("&lt;");
+            $("#toggleCenterIcon").removeClass("right");
+            $("#toggleCenterIcon").addClass("left");
         } else {
             $("#game").removeClass("centered");
-            $("#toggleCenter").html("&gt;");
+            $("#toggleCenterIcon").removeClass("left");
+            $("#toggleCenterIcon").addClass("right");
         }
 
     },
@@ -1172,7 +1159,6 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
 
     checkForUpdates: function(){
         var self = this;
-        if (self.game.ticks < 100) {return;}
         var now = Date.now();
         
         $.getJSON("build.version.json?=" + now).then(function(json){
@@ -1180,7 +1166,6 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
             
             if (buildRevision > self.game.telemetry.buildRevision){
                 $("#newVersion").toggle(true);
-                self.game.msg("有新版本，可以点击右上角更新按钮。");
             }
         });
     }

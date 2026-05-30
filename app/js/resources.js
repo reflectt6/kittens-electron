@@ -239,7 +239,8 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 		visible: true,
 		persists: false,
 		calculatePerTick: true,
-		aiCanDestroy: true
+		aiCanDestroy: true,
+		calculatePerTickAndDay: true
 	},{
 		name : "necrocorn",
 		title: $I("resources.necrocorn.title"),
@@ -469,7 +470,7 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
         title: $I("resources.kerosene.title"),
         type: "common",
         craftable: true,
-        color: "darkYellow",
+        color: "olive",
 		isNotRefundable: true,
 		tag: "chemist"
 	},{
@@ -527,12 +528,16 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 	energyCons: 0,
 
 	isLocked: false,
+	showHiddenResources: false, //Whether to show stuff like flux, gflops, & pseudo-resources
+	hiddenPseudoResources: null, //Array of names of pseudo-resources to mark as hidden
 
 	constructor: function(game){
 		this.game = game;
 
 		this.resources = [];
 		this.resourceMap = {};
+
+		this.hiddenPseudoResources = [];
 
 		for (var i = 0; i < this.resourceData.length; i++){
 			var res = dojo.clone(this.resourceData[i]);
@@ -563,30 +568,42 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 
 	//put your custom fake resources there
 	getPseudoResources: function(){
-		return [
+		var pactsManager = this.game.religion.pactsManager;
+		var pseudoResArr = [
 			{
 				name: "worship",
 				title: $I("resources.worship.title"),
 				value: this.game.religion.faith,
-				unlocked: true,
-				visible: false
+				unlocked: this.game.religion.faith > 0,
+				visible: false //Doesn't normally appear in resource table
 			},
 			{
 				name: "epiphany",
 				title: $I("resources.epiphany.title"),
 				value: this.game.religion.faithRatio,
-				unlocked: true,
+				unlocked: this.game.religion.faithRatio > 0 &&
+				          this.game.science.get("theology").researched &&
+				          !this.game.challenges.isActive("atheism"),
 				visible: false
 			},
 			{
 				name: "necrocornDeficit",
 				title: $I("resources.necrocornDeficit.title"),
-				value: this.game.religion.pactsManager.necrocornDeficit,
-				unlocked: true,
+				value: pactsManager.necrocornDeficit,
+				maxValue: pactsManager.fractureNecrocornDeficit,
+				unlocked: pactsManager.necrocornDeficit > 0 ||
+					//Do we have at least 1 pact purchased?
+					pactsManager.pacts.some(function(pact) {
+						return pact.val > 0;
+					}),
 				visible: false,
 				color: "#E00000"}
 		];
-		//TODO: mixin unlocked and visible automatically
+		//Apply settings to mark as hidden:
+		for (var i = 0; i < pseudoResArr.length; i += 1) {
+			pseudoResArr[i].isHidden = this.hiddenPseudoResources.includes(pseudoResArr[i].name);
+		}
+		return pseudoResArr;
 	},
 
 	createResource: function(name){
@@ -599,6 +616,10 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 
 			unlocked: false
 		};
+		if (name == "wood") {
+			//Wood is displayed as both a normal & a crafted resource.
+			res.isHiddenFromCrafting = false;
+		}
 		return res;
 	},
 
@@ -608,11 +629,10 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 		}
 
 		var prevValue = res.value || 0;
-
-		//if already overcap, allow to remain that way unless removing resources.
-		var limit = Math.max(res.value, res.maxValue || Number.POSITIVE_INFINITY);
-		res.value += addedValue;
+		res.value = Math.min(prevValue + addedValue, Number.MAX_VALUE);
 		if (!preventLimitCheck) {
+			//if already overcap, allow to remain that way unless removing resources.
+			var limit = Math.max(prevValue, res.maxValue || Number.MAX_VALUE);
 			res.value = Math.min(res.value, limit);
 		}
 
@@ -629,7 +649,17 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 			res.value = this.game.getUnlimitedDR(this.game.karmaKittens, 5);
 		}
 
-		return res.value - prevValue;
+		// return the amount the resource actually changed by.
+		if (res.value == prevValue + addedValue) {
+			// In this case, computing the return value as (res.value - prevValue) would yield the
+			// original addedValue, but with a double-rounding. This is usually minor, but it might
+			// make the return value be non-integer even though addedValue was an integer. So we
+			// return the original addedValue directly.
+			return addedValue;
+		} else {
+			// change was limited in some way; recompute the change amount.
+			return res.value - prevValue;
+		}
 	},
 
 	addResPerTick: function(name, value){
@@ -685,10 +715,18 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 
 		for (var i in this.resources){
 			var res = this.resources[i];
+			this.updateMaxValue(res);
+
 			if (res.name == "sorrow"){
-				res.maxValue = 16 + (game.getEffect("blsLimit") || 0);
-				res.value = res.value > res.maxValue ? res.maxValue : res.value;
 				continue;
+			}
+			if (res.name == "spice") { //This is a hack, will probably have to come up with a better system for this later
+				var now = new Date();
+				if (now.getMonth() == 9 && game.colorScheme == "spooky" && i18nLang.getLanguage() == "en") {
+					res.title = $I("resources.spice.title.october");
+				} else {
+					res.title = $I("resources.spice.title");
+				}
 			}
 
 			if (res.unlocked == false && res.value > 0){
@@ -701,23 +739,6 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 				}
 			}
 
-			var maxValue = game.getEffect(res.name + "Max") || 0;
-
-			maxValue = this.addResMaxRatios(res, maxValue);
-			
-			var challengeEffect = this.game.getEffect(res.name + "MaxChallenge");
-			if(challengeEffect){
-				challengeEffect = this.game.getLimitedDR(this.addResMaxRatios(res, challengeEffect), maxValue - 1);
-				maxValue += challengeEffect;
-			}
-			if (maxValue < 0 ){
-				maxValue = 0;
-			}
-
-			res.maxValue = maxValue;
-			if(game.loadingSave){ //hack to stop production before game.calculateAllEffects after manual import
-				continue;
-			}
 			var resPerTick = game.getResourcePerTick(res.name, false);
 			this.addResPerTick(res.name, resPerTick);
 
@@ -725,11 +746,11 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 		game.updateKarma();
 
 		//--------
-		var energyProdRatio = 1 + game.getEffect("energyProductionRatio");
+		var energyProdRatio = this.getEnergyProductionRatio();
 		this.energyProd = game.getEffect("energyProduction") * energyProdRatio;
 		this.energyWinterProd = this.energyProd;
-		var energyConsRatio = 1 + game.getLimitedDR(game.getEffect("energyConsumptionRatio"), 1) + game.getEffect("energyConsumptionIncrease");
-		this.energyCons = game.getEffect("energyConsumption") * energyConsRatio * (this.game.challenges.isActive("energy") ? 2 : 1);
+		var energyConsRatio = this.getEnergyConsumptionRatio();
+		this.energyCons = game.getEffect("energyConsumption") * energyConsRatio;
 
 		var currentSeason = game.calendar.season;
 		var solarFarm = game.bld.getBuildingExt("pasture");
@@ -738,6 +759,54 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 			var energyLoss = calculateEnergyProduction(game, currentSeason) - calculateEnergyProduction(game, 3);
 			this.energyWinterProd -= solarFarm.get("on") * energyLoss * energyProdRatio;
 		}
+	},
+
+	/**
+	 * Updates the storage limit for a given resource.
+	 * @param res The resource object to be updated.
+	 */
+	updateMaxValue: function(res) {
+		var game = this.game;
+		if (res.name == "sorrow"){
+			res.maxValue = 17 + (game.getEffect("blsLimit") || 0);
+			res.value = Math.min(res.value, res.maxValue);
+			return;
+		}
+
+		var maxValue = game.getEffect(res.name + "Max") || 0;
+
+		maxValue = Math.min(this.addResMaxRatios(res, maxValue), Number.MAX_VALUE);
+		
+		var challengeEffect = this.game.getEffect(res.name + "MaxChallenge");
+		if (challengeEffect){
+			// Negative effect, no need to cap again to Number.MAX_VALUE
+			challengeEffect = this.game.getLimitedDR(this.addResMaxRatios(res, challengeEffect), maxValue - 1 - game.bld.effectsBase[res.name +'Max']||0);
+			maxValue += challengeEffect;
+		}
+
+		res.maxValue = Math.max(maxValue, 0);
+	},
+
+	/**
+	 * Updates the storage limit for a given resource.
+	 * @param resName The name of the resource to be updated.
+	 */
+	updateMaxValueByName: function(resName) {
+		this.updateMaxValue(this.get(resName));
+	},
+
+	//All energy production amounts are multiplied by this number.
+	getEnergyProductionRatio: function() {
+		var game = this.game;
+		return 1 + game.getEffect("energyProductionRatio");
+	},
+
+	//All energy consumption amounts are multiplied by this number.
+	getEnergyConsumptionRatio: function() {
+		var game = this.game;
+		//LDR for the effect named "energyConsumptionRatio" is specified in challenges.js
+		return (1 + game.getEffect("energyConsumptionRatio") + game.getEffect("energyConsumptionIncrease")) *
+				(game.challenges.isActive("energy") ? 2 : 1);
 	},
 
 	//NB: don't forget to update resources before calling in redshift
@@ -753,8 +822,7 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 				}
 				//console.log("Adjusting resource", res.name, "delta",res.perTickCached, "max value", res.maxValue, "days offset", daysOffset);
 				//console.log("resource before adjustment:", res.value);
-				var resPerTick = Math.max(res.perTickCached + game.getEffect(res + 'PerTickCon'), 0);
-				this.addRes(res, resPerTick * daysOffset * this.game.calendar.ticksPerDay, true/*allowDuringParadoxes*/, true/*preventLimitCheck*/);
+				this.addRes(res, res.perTickCached * daysOffset * this.game.calendar.ticksPerDay, true/*allowDuringParadoxes*/, true/*preventLimitCheck*/);
 				//console.log("resource after adjustment:", res.value);
 			}
 		}
@@ -776,7 +844,7 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 	//Hack to reach the maxValue in resTable
 	//AB: Questionable
 	resConsHackForResTable: function() {
-		if( this.game.calendar.day >= 0) {
+		if ( this.game.calendar.day >= 0) {
 			for (var i in this.resources){
 				var res = this.resources[i];
 				if (res.maxValue) {
@@ -828,6 +896,14 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 			return maxValue;
 		}
 
+		//Unicorn Tears Challenge:
+		if (this.game.challenges.isActive("unicornTears")) {
+			if (res.name == "unicorns" || res.name == "tears" || res.name == "alicorn") {
+				maxValue *= 1 + this.game.getEffect(res.name + "MaxRatio");
+				return maxValue;
+			}
+		}
+
 		maxValue *= 1 + this.game.prestige.getParagonStorageRatio();
 
 		//+COSMIC RADIATION
@@ -855,12 +931,12 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 		
         //policies
 		//technocracy policy bonus
-		if(res.name == "science"){
+		if (res.name == "science"){
 			maxValue *= (1 + this.game.getEffect("technocracyScienceCap"));
 		}
 
         //city on a hill bonus
-        if(res.name == "culture"){
+        if (res.name == "culture"){
             maxValue *= (1 + this.game.getEffect("onAHillCultureCap"));
         }
 		return maxValue;
@@ -876,6 +952,8 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 
 	resetState: function(){
 		this.isLocked = false;
+		this.showHiddenResources = false;
+		this.hiddenPseudoResources = [];
 		for (var i = 0; i < this.resources.length; i++){
 			var res = this.resources[i];
 			res.value = 0;
@@ -883,13 +961,31 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 			res.perTickCached = 0;
 			res.unlocked = false;
 			res.isHidden = false;
+
+			if (res.name == "wood") {
+				res.isHiddenFromCrafting = false;
+			}
 		}
 	},
 
 	save: function(saveData){
 		saveData.res = {
-			isLocked: this.isLocked
+			isLocked: this.isLocked,
+			showHiddenResources: this.showHiddenResources || undefined
 		};
+		//Save flags on which pseudo-resources to hide
+		//But for sanity purposes, only save a pseudo-resource if it actually exists!
+		var pseudoResources = this.getPseudoResources();
+		for (var i = 0; i < pseudoResources.length; i += 1) {
+			var resName = pseudoResources[i].name;
+			if (this.hiddenPseudoResources.includes(resName)) {
+				//We've found a legit pseudo-resource to be marked as hidden
+				if (!saveData.res.hiddenPseudoResources) {
+					saveData.res.hiddenPseudoResources = [];
+				}
+				saveData.res.hiddenPseudoResources.push(resName);
+			}
+		}
 	},
 
 	load: function(saveData){
@@ -897,6 +993,8 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 
 		if (saveData.res){
 			this.isLocked = Boolean(saveData.res.isLocked);
+			this.showHiddenResources = Boolean(saveData.res.showHiddenResources);
+			this.hiddenPseudoResources = saveData.res.hiddenPseudoResources || [];
 		}
 	},
 
@@ -910,7 +1008,7 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 
 		var hasRes = true;
 		if (prices.length){
-			for( var i = 0; i < prices.length; i++){
+			for ( var i = 0; i < prices.length; i++){
 				var price = prices[i];
 
 				var res = this.get(price.name);
@@ -932,7 +1030,7 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 				var price = prices[i];
 
 				var res = this.get(price.name);
-				if (res.maxValue > 0 && price.val > res.maxValue && price.val > res.value){
+				if (price.val == Infinity || res.maxValue > 0 && price.val > res.maxValue && price.val > res.value){
 					return true;
 				}
 				if (res.craftable && price.val > res.value){ //account for chronosphere resets etc
@@ -948,7 +1046,7 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 
 	payPrices: function(prices){
 		if (prices.length){
-			for( var i = 0; i < prices.length; i++){
+			for ( var i = 0; i < prices.length; i++){
 				var price = prices[i];
 				this.addResEvent(price.name, -price.val);
 			}
@@ -956,7 +1054,7 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
 	},
 
 	maxAll: function(){
-		for(var i = 0; i < this.resources.length; i++){
+		for (var i = 0; i < this.resources.length; i++){
 			var res = this.resources[i];
 			if (res.maxValue && res.value < res.maxValue){
 				res.value = res.maxValue;
@@ -991,8 +1089,47 @@ dojo.declare("classes.managers.ResourceManager", com.nuclearunicorn.core.TabMana
     },
 
 	setDisplayAll: function() {
-		for(var i = 0; i < this.resources.length; i++){
-			this.resources[i].isHidden = false;
+		for (var i = 0; i < this.resources.length; i++){
+			var res = this.resources[i];
+			res.isHidden = false;
+			if (res.name == "wood") {
+				res.isHiddenFromCrafting = false;
+			}
+		}
+	},
+
+	//Sets the "isHidden" flag of a resource or a pseudo-resource.
+	//This exists because the UI code can't know if a resource is real or pseudo.
+	//Wood is a special case because it has 2 flags.  We don't handle that special case here.
+	setResourceIsHidden: function(resName, hide) {
+		if (typeof(resName) != "string") {
+			console.error("Can't set res.isHidden; resource name must be a string.");
+			return;
+		}
+		if (typeof(hide) != "boolean") {
+			console.error("Can't set res.isHidden; flag must be a boolean.");
+			return;
+		}
+
+		var res = this.get(resName);
+		if (res) {
+			//We have a real resource!
+			res.isHidden = hide;
+			return;
+		}
+		//Else, assume we're dealing with a pseudo-resource.
+		if (this.hiddenPseudoResources.includes(resName)) {
+			if (!hide) {
+				//Remove by value
+				this.hiddenPseudoResources = this.hiddenPseudoResources.filter(function(elem) {
+					return elem != resName;
+				});
+			}
+		} else {
+			//Pseudo-resource is not already in array.
+			if (hide) {
+				this.hiddenPseudoResources.push(resName);
+			}
 		}
 	},
 

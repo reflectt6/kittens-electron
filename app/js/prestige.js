@@ -98,7 +98,8 @@ dojo.declare("classes.managers.PrestigeManager", com.nuclearunicorn.core.TabMana
 			"perks": ["divineProportion"]
 		},
 		effects:{
-			"priceRatio" : -(1 + Math.sqrt(5)) / 200	//Calculates the Golden Ratio
+			"priceRatio" : -(1 + Math.sqrt(5)) / 200,	//Calculates the Golden Ratio
+			"queueCap": 1
 		}
 	},{
 		name: "divineProportion",
@@ -111,7 +112,8 @@ dojo.declare("classes.managers.PrestigeManager", com.nuclearunicorn.core.TabMana
 			"perks": ["vitruvianFeline"]
 		},
 		effects:{
-			"priceRatio" : -16 / 900
+			"priceRatio" : -16 / 900,
+			"queueCap": 2
 		}
 	},{
 		name: "vitruvianFeline",
@@ -134,7 +136,8 @@ dojo.declare("classes.managers.PrestigeManager", com.nuclearunicorn.core.TabMana
 		unlocked: false,
 		researched: false,
 		effects:{
-			"priceRatio" : -0.0225
+			"priceRatio" : -0.0225,
+			"queueCap": 2
 		}
 	},{
 		name: "diplomacy",
@@ -146,6 +149,12 @@ dojo.declare("classes.managers.PrestigeManager", com.nuclearunicorn.core.TabMana
 		researched: false,
 		effects:{
 			"standingRatio" : 0.1
+		},
+		handler: function(game) { //Called when this is purchased
+			game.science.unlockRelations();
+		},
+		upgrades:{
+			policies: ["lizardRelationsEcologists"]
 		},
 		unlocks: {
 			"perks": ["zebraDiplomacy"]
@@ -202,9 +211,22 @@ dojo.declare("classes.managers.PrestigeManager", com.nuclearunicorn.core.TabMana
 		label: $I("prestige.unicornmancy.label"),
 		description: $I("prestige.unicornmancy.desc"),
 		prices: [{ name: "paragon", val: 125 }],
-		unlocked: true,
-		defaultUnlocked: true,
-		researched: false
+		unlocked: false,
+		defaultUnlocked: false,
+		researched: false,
+		unlocks: {
+			"perks": ["alicornmancy"]
+		}
+	},{
+		name: "alicornmancy", //Exists to reduce reliance on RNG during the Unicorn Tears Challenge
+		label: $I("prestige.alicornmancy.label"),
+		description: $I("prestige.alicornmancy.desc"),
+		prices: [{ name: "paragon", val: 200 }],
+		unlocked: false,
+		researched: false,
+		upgrades: {
+			zigguratUpgrades: ["skyPalace", "unicornUtopia", "sunspire"]
+		}
 	},
 	{
 		name: "anachronomancy",
@@ -539,11 +561,14 @@ dojo.declare("classes.ui.PrestigeBtnController", com.nuclearunicorn.game.ui.Buil
         return model.metaCached;
     },
 
-   	buyItem: function(model, event, callback) {
+   	buyItem: function(model, event) {
 		if (this.game.science.get("metaphysics").researched) {
-			this.inherited(arguments);
+			return this.inherited(arguments);
 		} else {
-			callback(false);
+			return {
+				itemBought: false,
+				reason: "not-unlocked"
+			};
 		}
 	},
 

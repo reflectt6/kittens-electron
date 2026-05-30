@@ -1,46 +1,77 @@
 <!doctype html>
-<html lang="zh_CN">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Cache-Control" content="private, no-cache, no-store">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link rel="shortcut icon" href="res/favicon.gif" type="image/x-icon">
 
-    <!-- Local libraries (offline support) -->
+    <!-- Cheats panel styles -->
+    <style>
+        #cheatDiv { z-index: 9999 !important; max-height: 80vh; overflow-y: auto; margin-top: -250px; }
+        #cheatDiv fieldset { border: 1px solid #c0392b; border-radius: 4px; padding: 8px 12px; margin-bottom: 8px; }
+        #cheatDiv legend { color: #c0392b; padding: 0 6px; font-size: 13px; font-weight: bold; }
+        #cheatDiv input[type="button"] { margin: 2px 4px 2px 0; padding: 3px 10px; font-size: 12px; }
+        #cheat-link { text-decoration: none; }
+        #cheat-link:hover { text-decoration: underline; }
+    </style>
+
     <script src="lib/react.min.js"></script>
     <script src="lib/jQuery.js"></script>
     <script src="lib/dojo.xd.js"></script>
     <script src="lib/lz-string.js"></script>
+    <script src="lib/dropbox_v2.js"></script>
+    <script src="lib/md5.js"></script>
     <script src="lib/system.js"></script>
 
-    <script type="text/javascript">
+    <script>
+        SystemJS.config({
+            // Babel transpiler removed — game modules are plain ES5
+        });
+    </script>
+
+    <script>
         var now = Date.now();
-        $("<link />").attr("rel", "stylesheet").attr("type", "text/css").attr("href", "res/default.css?v=" + new Date().getMonth()).appendTo($("head"));
+        $("<link />").attr("rel", "stylesheet").attr("type", "text/css").attr("href", "res/default.css?_=" + now).appendTo($("head"));
     </script>
 
     <script>
         window.LCstorage = window.localStorage;
         if (document.all && !window.localStorage) {
             window.LCstorage = {};
-            window.LCstorage.removeItem = function() {};
+            window.LCstorage.removeItem = function () { };
         }
     </script>
 
-    <script type="text/javascript">
-        var version = "1490";
+    <script>
+        // 默认语言: 中文
+        if (!localStorage['com.nuclearunicorn.kittengame.language']) {
+            localStorage['com.nuclearunicorn.kittengame.language'] = 'zh';
+        }
+    </script>
+
+    <script>
+        var version = "1502";
         var buildRevision = 0;
-        var ksVision = 0;
+        var invalidateCache = false;
+
+        var host = window.location.hostname;
+        var isLocalhost = window.location.protocol == "file:" || host == "localhost" || host == "127.0.0.1" || host.startsWith("192.168");
+        if (isLocalhost) {
+            invalidateCache = true;
+        }
 
         var loadingProgress = 0,
             progressMax = 0;
 
         var loadingMessages = [
-            "喵~",
-            "喵喵~",
-            "喵喵喵~",
-            "喵喵喵喵~",
-            "喵喵喵喵喵~",
+            "mew~mew~",
+            "mew~mew~mew~",
+            "mew~mew~mew~mew~",
+            "mew~mew~mew~mew~mew~",
         ];
 
         function loadModule(module) {
@@ -50,16 +81,20 @@
             $("#loadingProgressBar").attr("value", progress);
             var i = (Math.floor(Math.random() * loadingMessages.length));
             $("#loadingProgressInfo").html(loadingMessages[i] + "...&nbsp(" + progress.toFixed() + "%)");
-            return System.import(module + ".js?rev_=" + buildRevision);
+            var rev = buildRevision;
+            if (invalidateCache) {
+                rev += "_" + Date.now();
+            }
+            return System.import(module + ".js?rev_=" + rev);
         }
 
         function _import(module, def) {
             if (!def) {
                 return loadModule(module);
             } else {
-                return def.then(function() {
+                return def.then(function () {
                     return loadModule(module);
-                }).catch(function(err) {
+                }).catch(function (err) {
                     console.error("_import#: unable to load module:", module);
                     console.trace(err);
                 });
@@ -67,14 +102,12 @@
         }
 
         function loadTheme(themeId, timestamp) {
-            $("<link />")
-                .attr("rel", "stylesheet")
-                .attr("type", "text/css")
-                .attr("href", "res/theme_" + themeId + ".css?_=" + buildRevision)
+            $("<link />").attr("rel", "stylesheet").attr("type", "text/css")
+                .attr("href", "res/theme_" + themeId + ".css?_=" + timestamp)
                 .appendTo($("head"));
         }
 
-        dojo.addOnLoad(function() {
+        dojo.addOnLoad(function () {
             var displayedVersion = version.split('').join('.');
             if (window.location.href.indexOf("alpha") >= 0) {
                 displayedVersion += "-&alpha;";
@@ -83,10 +116,6 @@
             }
 
             $("#tooltip").hide();
-
-            SystemJS.config({
-                baseURL: ''
-            });
 
             var modules = [
                 "js/resources",
@@ -98,11 +127,13 @@
                 "js/diplomacy",
                 "js/religion",
                 "js/achievements",
+                "js/settings",
 
                 "js/jsx/left.jsx",
                 "js/jsx/mid.jsx",
                 "js/jsx/toolbar.jsx",
                 "js/jsx/chiral.jsx",
+                "js/jsx/queue.jsx",
 
                 "js/ui",
                 "js/space",
@@ -119,38 +150,35 @@
             progressMax = modules.length + 3;
             console.log("Loading...");
 
-            var loadedTheme = [];
             var uiData = LCstorage["com.nuclearunicorn.kittengame.ui"];
             var uiSettings = uiData && JSON.parse(uiData);
             if (uiSettings) {
                 if (uiSettings.theme) {
                     $("body").addClass("scheme_" + uiSettings.theme);
-                    loadedTheme.push(uiSettings.theme);
+                    loadTheme(uiSettings.theme, now);
                 }
             }
 
-            $("#schemeToggle").on('change', function () {
-                let theme = $('#schemeToggle').val();
-                if (loadedTheme.indexOf(theme) == -1) {
-                    loadedTheme.push(theme);
-                    loadTheme(theme);
-                }
-                gamePage.toggleScheme(theme);
-            });
-
-            var def = $.getJSON("build.version.json?=" + now).then(function(json) {
+            var def = $.getJSON("build.version.json?=" + now).then(function (json) {
                 buildRevision = json.buildRevision;
-                ksVision = json.ksVision;
-                loadedTheme.length > 0 && loadTheme(uiSettings.theme);
-                console.log("build revision is " + buildRevision);
+                console.log("build revison is: " + buildRevision);
                 $("#versionLink").html(displayedVersion + ".r" + buildRevision);
             });
             def = _import("config", def);
+            def.then(function () {
+                var schemes = new classes.KGConfig().statics.schemes;
+                for (var i = 0; i < schemes.length; ++i) {
+                    if (!uiSettings || uiSettings.theme != schemes[i]) {
+                        loadTheme(schemes[i], buildRevision);
+                    }
+                }
+            });
+
             def = _import("i18n", def);
-            def.then(function() {
+            def.then(function () {
                 console.log("Loading locale system");
-                var langPromise = i18nLang.init(buildRevision + "2");
-                langPromise.done(function() {
+                var langPromise = i18nLang.init(buildRevision);
+                langPromise.done(function () {
                     loadingMessages = [
                         $I("ui.loading.msg.0"),
                         $I("ui.loading.msg.1"),
@@ -171,15 +199,14 @@
                     ];
 
                     def = _import("core", def);
-                    def.then(function() {
+                    def.then(function () {
                         console.log("Loading game modules");
                         for (var i in modules) {
                             def = _import(modules[i], def);
                         }
                         def.then(initGame);
                     });
-
-                }).fail(function() {
+                }).fail(function () {
                     console.log("Unable to load locales");
                 });
             });
@@ -208,24 +235,99 @@
                 gamePage.ui.onLoad();
                 gamePage.start();
 
-                var config = new classes.KGConfig();
                 if (gamePage.isEldermass()) {
-                    if (gamePage.resPool.get("elderBox").value == 0) {
-                        gamePage.resPool.get("elderBox").value++;
-                        gamePage.msg($I("gift.get"), "important");
-                    }
-                } else {
-                    if (gamePage.resPool.get("elderBox").value > 0 && gamePage.resPool.get("elderBox").value < 1) {
-                        gamePage.resPool.get("elderBox").value = 1;
-                        gamePage.msg($I("gift.repaired"), "important");
-                    }
+                    gamePage.resPool.get("elderBox").value = Math.min(1, gamePage.resPool.get("elderBox").value + 1);
+                    gamePage.msg($I("gift.get"), "important");
                 }
 
-                var host = window.location.hostname;
-                gamePage.isLocalhost = window.location.protocol == "file:" || host == "localhost" || host == "127.0.0.1";
-                if (gamePage.isLocalhost) {
-                    $("#devModeButton").show();
+                // 自定义按钮翻译更新
+                function updateCustomLabels() {
+                    var lang = LCstorage["com.nuclearunicorn.kittengame.language"] || "zh";
+                    var labels = { zh: { restore: "恢复", cheats: "金手指" },
+                                   zht: { restore: "恢復", cheats: "金手指" },
+                                   en: { restore: "Restore", cheats: "Cheats" } };
+                    var t = labels[lang] || labels["en"];
+                    var r = $("#restore-link");
+                    var c = $("#cheat-link");
+                    if (r.length) r.text(t.restore);
+                    if (c.length) c.text(t.cheats);
+                    updateCheatLabels(lang);
                 }
+
+                // 金手指面板翻译
+                var CHEAT_I18N = {
+                    zh: {
+                        "cheats.title":"🐱 金手指","cheats.resources":"资源","cheats.science":"科技 & 工坊",
+                        "cheats.time":"时间","cheats.faith":"信仰 & 宗教","cheats.prestige":"声望","cheats.other":"其他",
+                        "cheats.maxall":"全部填满","cheats.catnip":"猫薄荷 +1K","cheats.wood":"木材 +500",
+                        "cheats.minerals":"矿物 +500","cheats.kittens":"小猫 +10","cheats.starchart":"星图 +100",
+                        "cheats.titanium":"钛 +500","cheats.uranium":"铀 +100","cheats.unobtainium":"难得素 +100",
+                        "cheats.alltechs":"解锁全部科技","cheats.allupgrades":"解锁全部升级",
+                        "cheats.storage":"增加存储","cheats.allschemes":"解锁全部主题",
+                        "cheats.skip1y":"快进1年","cheats.skip10y":"快进10年","cheats.skip100y":"快进100年",
+                        "cheats.speedup":"加速日历","cheats.maxfaith":"信仰填满",
+                        "cheats.praise":"赞美太阳 (+1K)","cheats.tears":"眼泪 +100","cheats.relic":"遗物 +100",
+                        "cheats.allreligion":"解锁全部宗教","cheats.paragon100":"典范 +100",
+                        "cheats.paragon1000":"典范 +1000","cheats.karma10":"业 +10",
+                        "cheats.burned":"燃烧典范 +100","cheats.sorrow":"悲伤 +100",
+                        "cheats.alldiplomacy":"解锁全部外交","cheats.allachievements":"解锁全部成就",
+                        "cheats.allchallenges":"解锁全部挑战","cheats.allprestige":"解锁全部声望",
+                        "cheats.unlockall":"🔥 一键全部解锁"
+                    },
+                    zht: {
+                        "cheats.title":"🐱 金手指","cheats.resources":"資源","cheats.science":"科技 & 工坊",
+                        "cheats.time":"時間","cheats.faith":"信仰 & 宗教","cheats.prestige":"聲望","cheats.other":"其他",
+                        "cheats.maxall":"全部填滿","cheats.catnip":"貓薄荷 +1K","cheats.wood":"木材 +500",
+                        "cheats.minerals":"礦物 +500","cheats.kittens":"小貓 +10","cheats.starchart":"星圖 +100",
+                        "cheats.titanium":"鈦 +500","cheats.uranium":"鈾 +100","cheats.unobtainium":"難得素 +100",
+                        "cheats.alltechs":"解鎖全部科技","cheats.allupgrades":"解鎖全部升級",
+                        "cheats.storage":"增加存儲","cheats.allschemes":"解鎖全部主題",
+                        "cheats.skip1y":"快進1年","cheats.skip10y":"快進10年","cheats.skip100y":"快進100年",
+                        "cheats.speedup":"加速日曆","cheats.maxfaith":"信仰填滿",
+                        "cheats.praise":"讚美太陽 (+1K)","cheats.tears":"眼淚 +100","cheats.relic":"遺物 +100",
+                        "cheats.allreligion":"解鎖全部宗教","cheats.paragon100":"典範 +100",
+                        "cheats.paragon1000":"典範 +1000","cheats.karma10":"業 +10",
+                        "cheats.burned":"燃燒典範 +100","cheats.sorrow":"悲傷 +100",
+                        "cheats.alldiplomacy":"解鎖全部外交","cheats.allachievements":"解鎖全部成就",
+                        "cheats.allchallenges":"解鎖全部挑戰","cheats.allprestige":"解鎖全部聲望",
+                        "cheats.unlockall":"🔥 一鍵全部解鎖"
+                    },
+                    en: {
+                        "cheats.title":"🐱 Cheats","cheats.resources":"Resources","cheats.science":"Science & Workshop",
+                        "cheats.time":"Time","cheats.faith":"Faith & Religion","cheats.prestige":"Prestige","cheats.other":"Other",
+                        "cheats.maxall":"Max All","cheats.catnip":"Catnip +1K","cheats.wood":"Wood +500",
+                        "cheats.minerals":"Minerals +500","cheats.kittens":"Kittens +10","cheats.starchart":"Starchart +100",
+                        "cheats.titanium":"Titanium +500","cheats.uranium":"Uranium +100","cheats.unobtainium":"Unobtainium +100",
+                        "cheats.alltechs":"Unlock All Techs","cheats.allupgrades":"Unlock All Upgrades",
+                        "cheats.storage":"More Storage","cheats.allschemes":"Unlock All Schemes",
+                        "cheats.skip1y":"Skip 1 Year","cheats.skip10y":"Skip 10 Years","cheats.skip100y":"Skip 100 Years",
+                        "cheats.speedup":"Speed Up Calendar","cheats.maxfaith":"Max Faith",
+                        "cheats.praise":"Praise Sun (+1K)","cheats.tears":"Tears +100","cheats.relic":"Relic +100",
+                        "cheats.allreligion":"Unlock All Religion","cheats.paragon100":"Paragon +100",
+                        "cheats.paragon1000":"Paragon +1000","cheats.karma10":"Karma +10",
+                        "cheats.burned":"Burned Paragon +100","cheats.sorrow":"Sorrow +100",
+                        "cheats.alldiplomacy":"Unlock All Diplomacy","cheats.allachievements":"Unlock All Achievements",
+                        "cheats.allchallenges":"Unlock All Challenges","cheats.allprestige":"Unlock All Prestige",
+                        "cheats.unlockall":"🔥 Unlock Everything"
+                    }
+                };
+                function updateCheatLabels(lang) {
+                    var t = CHEAT_I18N[lang] || CHEAT_I18N["en"];
+                    $("[data-ci18n]").each(function() {
+                        var key = $(this).attr("data-ci18n");
+                        if (t[key]) {
+                            if (this.tagName === "INPUT") $(this).val(t[key]);
+                            else $(this).text(t[key]);
+                        }
+                    });
+                }
+                updateCustomLabels();
+
+                var _origUpdateLang = gamePage.ui.updateIndexHTMLLanguage;
+                gamePage.ui.updateIndexHTMLLanguage = function() {
+                    _origUpdateLang.apply(this, arguments);
+                    updateCustomLabels();
+                };
             } catch (ex) {
                 if (game && game.telemetry) {
                     game.telemetry.logEvent("error", ex);
@@ -236,7 +338,7 @@
         }
 
         function dev() {
-            if (gamePage.isLocalhost) {
+            if (isLocalhost) {
                 $("#dev_boostCalendar").show();
                 $("#devPanelCheats").show();
                 gamePage.devMode = true;
@@ -251,36 +353,88 @@
         function wipe() {
             gamePage.wipe();
         }
+
+        // ========== File save system ==========
+        function saveToFile() {
+            if (!gamePage || !window.electronAPI) return;
+            var data = gamePage.save();
+            var compressed = gamePage.compressLZData(JSON.stringify(data));
+            window.electronAPI.saveGameFile(compressed).then(function (r) {
+                if (r.success) console.log('Save file written:', r.path);
+            });
+        }
+
+        function loadFromFile() {
+            if (!gamePage || !window.electronAPI) return;
+            window.electronAPI.loadLatestSave().then(function (r) {
+                if (r.success && r.data) {
+                    gamePage.saveImportDropboxText(r.data, function(err) {
+                        if (!err) gamePage.msg('Save restored from backup');
+                    });
+                } else {
+                    gamePage.msg('No backup save found');
+                }
+            });
+        }
+
+        // ========== Cheats ==========
+        function cheat_addRes(name, amount) {
+            if (!gamePage) return;
+            var res = gamePage.resPool.get(name);
+            if (res) { res.value += amount; gamePage.msg('Gained ' + res.title + ' +' + amount); gamePage.ui.render(); }
+        }
+        function cheat_maxRes(name) {
+            if (!gamePage) return;
+            var res = gamePage.resPool.get(name);
+            if (res && res.maxValue) { res.value = res.maxValue; gamePage.msg(res.title + ' filled'); gamePage.ui.render(); }
+        }
+        function cheat_maxAll() {
+            if (!gamePage) return;
+            gamePage.resPool.maxAll(); gamePage.msg('All resources filled'); gamePage.ui.render();
+        }
+        function cheat_fastForward(days) {
+            if (!gamePage) return;
+            gamePage.calendar.fastForward(days); gamePage.msg('Fast forward ' + days + ' days'); gamePage.ui.render();
+        }
+        function cheat_addKarma(amount) {
+            if (!gamePage) return;
+            gamePage.karma += amount; gamePage.karmaKittens += amount;
+            gamePage.msg('Karma +' + amount); gamePage.ui.render();
+        }
+        function cheat_unlockAll() {
+            if (!gamePage) return;
+            gamePage.resPool.maxAll();
+            gamePage.science.unlockAll();
+            gamePage.workshop.unlockAll();
+            gamePage.bld.devAddStorage();
+            gamePage.religion.unlockAll();
+            gamePage.diplomacy.unlockAll();
+            gamePage.achievements.unlockAll();
+            gamePage.prestige.unlockAll();
+            try { gamePage.challenges.unlockAll(); } catch (e) { }
+            gamePage.unlockedSchemes = gamePage.ui.allSchemes;
+            gamePage.ui.updateOptions();
+            gamePage.msg('Unlock all done!');
+            gamePage.ui.render();
+        }
     </script>
 
-    <title>猫国建设者 - Kittens Game</title>
+    <title>Kittens Game</title>
 </head>
 
 <body>
     <div id="gamePageContainer">
         <div id="topBar">
             <div style="padding-left: 10px; min-width: 0px; max-width: 400px; overflow: hidden; text-overflow: ellipsis;">
-                <span class="gameTitle">猫国建设者 </span>
+                <span class="gameTitle">Kittens Game </span>
                 <span style="font-size: small;">
                     by <a href="http://kittensgame.com/" class="copyright" target="_blank">bloodrizer</a>
                 </span>
                 <span id="motd"></span>
                 <span style="font-size: small;">
-                    <a href="http://kittensgame.com/beta" title="测试版本" target="_blank">&beta;</a>
-                    <a href="http://kittensgame.com/web" title="国外英文官网版本" target="_blank"><strong>ML</strong></a>
                 </span>
             </div>
 
-            <div id="devPanel" style="display:inline-block; padding-left: 15px; font-size: 14px;">
-                <div id="devPanelFPS" onclick="gamePage.restartFPSCounters()"></div>
-                <div id="devPanelCheats" style="display:none">
-                    <a href="#" onclick="gamePage.science.unlockAll();">All techs</a>
-                    <a href="#" onclick="gamePage.workshop.unlockAll();">All upgrades</a>
-                    <a href="#" onclick="gamePage.resPool.maxAll();">All resources</a>
-                    <a href="#" onclick="gamePage.bld.devAddStorage();">More storage</a>
-                    <a href="#" onclick="gamePage.unlockedSchemes = gamePage.ui.allSchemes; gamePage.ui.updateOptions();">All themes</a>
-                </div>
-            </div>
 
             <div id="headerLinks">
                 <div id="headerToolbar" style="font-size: 12px; padding-top: 3px;"></div>
@@ -289,19 +443,20 @@
             </div>
 
             <div class="links-block" style="padding-top:3px; display:inline-flex;">
-                <a id="save-link" href="#" onclick="gamePage.saveUI();" title="本地保存">Save</a> |
+                <a id="save-link" href="#" onclick="gamePage.saveUI(); saveToFile();" title="Save">Save</a> |
+                <a id="restore-link" href="#" onclick="loadFromFile();" title="Restore from backup" style="color:#2980b9;">Restore</a> |
                 <a id="options-link" href="#" onclick="$('#optionsDiv').toggle();">Options</a> |
                 <a id="reset-link" href="#" onclick="gamePage.reset();">Reset</a> |
-                <span id="devModeButton" style="display: none;"><a href="#" id="devBtn" onclick="dev();">DEV</a> |</span>
                 <a id="wipe-link" href="#" onclick="wipe();">Wipe</a> |
-                <a target="_blank" onclick='changelog();'>Ver <span id="versionLink">?.?.?.?</span></a>
-                <a href="#" id="newVersion" onclick="gamePage.reload();" title="有新版本 !" style="display:none">↻</a>
+                <a id="cheat-link" href="#" onclick="$('#cheatDiv').toggle();" style="color:#c0392b; font-weight:bold;">Cheats</a> |
+                <a target="_blank" onclick="window.open('changelog.html?v=' + buildRevision);">Ver <span id="versionLink">?.?.?.?</span></a>
+                <a href="#" id="newVersion" onclick="gamePage.reload();" title="New version!" style="display:none">↻</a>
             </div>
         </div>
 
         <div id="loadingContainer">
             <div class="content">
-                <span style="font-size:18px;"><img class="loader" width="16" height="16" src="res/ajax-loader.gif" alt="加载中">&nbsp;加载中...<br></span>
+                <span style="font-size:18px;"><img class="loader" width="16" height="16" src="res/ajax-loader.gif" alt="loading">&nbsp;Loading...<br></span>
                 <br>
                 <progress id="loadingProgressBar" value="0" max="100"></progress>
                 <div id="loadingProgressInfo">Setting up game engine...</div>
@@ -313,24 +468,25 @@
 
             <!-- LEFT -->
             <div id="leftColumn" class="column" style="vertical-align: top;">
-                <div id="leftColumnViewport">加载中...</div>
+                <div id="leftColumnViewport"></div>
             </div>
 
             <!-- MID -->
             <div id="midColumn" style="vertical-align: top;" class="column">
-                <div id="midColumnViewport" style="float:right; padding: 5px;">&nbsp;加载中...</div>
+                <div id="midColumnViewport" style="float:right; padding: 5px;">&nbsp;</div>
                 <div id="gameContainerId" style="border: 1px solid gray;">
                     <div id="gameContainerHelp" style="font-size:150%;">
-                        看起来游戏错误。别担心试试这几个办法。<br>
+                        Something went wrong. Don't worry, it's probably not your fault.<br>
                         <ul>
-                            <li>确保启用了JavaScript 或者 广告插件 不在工作。</li>
-                            <li>使用 Ctrl+F5 强制刷新。</li>
-                            <li>过十几分中后再打开游戏。</li>
-                            <li>导出你的存档，保存好，清空游戏数据，再重新导入存档。
+                            <li>Make sure JavaScript is enabled and no addons are blocking it.</li>
+                            <li>If the game stuck on the loading screen, press Ctrl+F5.</li>
+                            <li>If the error persist, try waiting for a couple of minutes and then reload the game.</li>
+                            <li>
+                                Export your save, wipe save data and import it back. If that doesn't help, copy the export data and send it along with your system information. To open console:
                                 <ul>
-                                    <li>按下F12 会有弹窗，</li>
-                                    <li>点击"Console"（控制台），</li>
-                                    <li>截图 （红色字体），</li>
+                                    <li>Press F12</li>
+                                    <li>Click on "Console"</li>
+                                    <li>Take a screenshot of the error message (red text)</li>
                                 </ul>
                             </li>
                         </ul>
@@ -346,12 +502,18 @@
                 </div>
                 <div class="right-tab-header">
                     <a id="logLink" href="#" class="active" onclick="gamePage.ui.hideChat();">Log</a>
+                    <a id="chatLink" href="#" onclick="gamePage.ui.showChat();">Chat</a>
                 </div>
                 <div id="observeButton"></div>
+                <div class="right-tab" id="rightTabChat" style="display:none; overflow-y: hidden;">
+                    <div class="console-intro">
+                        <iframe id="discordIframe" src="" width="320" height="360" style="border: 0; overflow: hidden;" scrolling="no"></iframe>
+                    </div>
+                </div>
                 <div class="right-tab" id="rightTabLog">
                     <div>
                         <div class="console-intro" style="padding-top: 10px; border-top: 1px solid gray;">
-                            你是猫薄荷森林里的一只小猫。
+                            You are a kitten in a catnip forest.
                         </div>
                         <span id="clearLog">
                             <a id="clearLogHref" href="#" onclick="gamePage.clearLog();">Clear log</a>
@@ -365,9 +527,12 @@
                     </div>
                     <div id="gameLog" style="overflow-y: scroll; padding-top: 10px; height: 100%; min-height:100%;"></div>
                 </div>
+                <div class="right-tab" id="rightTabQueue" style="display:none;">
+                    <div id="queueViewport"></div>
+                </div>
             </div>
             <div id="toggleCenter" onclick="gamePage.ui.toggleCenter();" class="column" tooltip="Toggle centered view">
-                <span class="toggleCenter">&gt;</span>
+                <span class="toggleCenter"><div id="toggleCenterIcon" class="svg-icon right"/></span>
             </div>
         </div>
 
@@ -375,105 +540,43 @@
         <div id="optionsDiv" style="display: none;" class="dialog help">
             <a id="optionsDialogClose" href="#" class="close" onclick="gamePage.closeOptions()" style="position: absolute; top: 10px; right: 15px;">close</a>
             <label id="optionLanguage" for="languageSelector">Language:</label>
-            <select id="languageSelector" onchange="gamePage.ui.updateLanguage()"></select> &nbsp;
+            <select id="languageSelector" onchange="gamePage.ui.updateLanguage()"></select>&nbsp;<a id="addTranslationLink" target="_blank" href="https://crowdin.com/project/kittensgame" style="font-size:14px;">Translation portal</a>
             <a id="languageApplyLink" href="#" onclick="gamePage.ui.applyLanguage()" style="display: none; padding-left: 15px;">Apply changes</a>
             <br><br>
             <label id="optionNotation" for="notationSelector">Notation:</label>
             <select id="notationSelector" onchange="gamePage.ui.updateNotation()"></select>
             <br><br>
             <label id="optionScheme" for="schemeToggle">Color scheme:</label>
-            <select id="schemeToggle"></select> &nbsp;
-            <a id="schemeRelock" href="#" onclick="gamePage.ui.relockSchemes()" style="font-size:14px;">Relock schemes</a>
-            <br><em><span id="schemeTip" style="font-size: 70%;">Schemes that you cannot select yet can be permanently unlocked by specific actions.</span></em>
+            <select id="schemeToggle" onchange="gamePage.toggleScheme($('#schemeToggle').val())"></select>&nbsp;<a id="schemeRelock" href="#" onclick="gamePage.ui.relockSchemes()" style="font-size:14px;">Relock schemes</a>
+            <br><i><span id="schemeTip" style="font-size: 70%;">Schemes that you cannot select yet can be permanently unlocked by specific actions.</span></i>
             <br><br>
-            <input id="workersToggle" type="checkbox" onclick="gamePage.useWorkers = $('#workersToggle')[0].checked;">
-            <label id="optionWorkers" for="workersToggle">Use web worker <em>(game works correctly in background tab, may cause performance issues)<br>You need to refresh the browser page for this setting to take effect.</em></label>
+
+            <div id="booleanOptionsNormal"></div>
             <br>
-            <input id="forceHighPrecision" type="checkbox" onclick="gamePage.opts.forceHighPrecision = $('#forceHighPrecision')[0].checked;">
-            <label id="optionForceHighPrecision" for="forceHighPrecision">Use high precision for resource values</label>
-            <br>
-            <input id="usePerSecondValues" type="checkbox" onclick="gamePage.opts.usePerSecondValues = $('#usePerSecondValues')[0].checked;">
-            <label id="optionUsePerSecondValues" for="usePerSecondValues">Use per second values <em>(per tick otherwise)</em></label>
-            <br>
-            <input id="usePercentageResourceValues" type="checkbox" onclick="gamePage.opts.usePercentageResourceValues = $('#usePercentageResourceValues')[0].checked;">
-            <label id="optionUsePercentageResourceValues" for="usePercentageResourceValues">Use percentage resource production values</label>
-            <br>
-            <input id="showNonApplicableButtons" type="checkbox" onclick="gamePage.opts.showNonApplicableButtons = $('#showNonApplicableButtons')[0].checked;">
-            <label id="optionShowNonApplicableButtons" for="showNonApplicableButtons">Always show festivals/trade/sacrifice/shatter buttons even if not applicable</label>
-            <br>
-            <input id="usePercentageConsumptionValues" type="checkbox" onclick="gamePage.opts.usePercentageConsumptionValues = $('#usePercentageConsumptionValues')[0].checked;">
-            <label id="optionUsePercentageConsumptionValues" for="usePercentageConsumptionValues">Use percentage values for craft/trade/sacrifice buttons</label>
-            <br>
-            <input id="highlightUnavailable" type="checkbox" onclick="gamePage.opts.highlightUnavailable = $('#highlightUnavailable')[0].checked;">
-            <label id="optionHighlightUnavailable" for="highlightUnavailable">Highlight buildings limited by storage space</label>
-            <br>
-            <input id="set-ks-enable" type="checkbox">
-            <label id="ks-label" for="set-ks-enable" style="color:red;">启用小猫珂学家</label>
-            <br>
-            <input id="set-kgp-enable" type="checkbox">
-            <label id="kgp-label" for="set-kgp-enable">资源进度条</label>
-            <br>
-            <input id="autoSaveReset" type="checkbox" onclick="gamePage.opts['autoSaveReset'] = $('#autoSaveReset')[0].checked;">
-            <label id="optionAutoSaveReset" for="autoSaveReset">重置游戏自动备份存档<em>（需要在浏览器设置下载保存位置！）</em></label>
-            <br>
-            <input id="hideSell" type="checkbox" onclick="gamePage.opts.hideSell = $('#hideSell')[0].checked;">
-            <label id="optionHideSell" for="hideSell">Hide 'sell' buttons</label>
-            <br>
-            <input id="hideDowngrade" type="checkbox" onclick="gamePage.opts.hideDowngrade = $('#hideDowngrade')[0].checked;">
-            <label id="optionHideDowngrade" for="hideDowngrade">Hide 'downgrade' buttons</label>
-            <br>
-            <input id="hideBGImage" type="checkbox" onclick="gamePage.opts.hideBGImage = $('#hideBGImage')[0].checked; gamePage.ui.updateOptions();">
-            <label id="optionHideBGImage" for="hideBGImage">Hide background image <em>(for color schemes where applicable)</em></label>
-            <br>
-            <input id="tooltipsInRightColumn" type="checkbox" onclick="gamePage.opts.tooltipsInRightColumn = $('#tooltipsInRightColumn')[0].checked; gamePage.ui.updateOptions();">
-            <label id="optionTooltipsInRightColumn" for="tooltipsInRightColumn">Move tooltips in right column</label>
-            <br><br>
+
             <a id="optionMore" href="#" onclick="$('.optsExtra').toggle();">More...</a>
             <div class="optsExtra" style="display:none;">
-                <input id="noConfirm" type="checkbox" onclick="gamePage.opts.noConfirm = $('#noConfirm')[0].checked;">
-                <label id="optionNoConfirm" for="noConfirm">Do not confirm when clearing all jobs, researching policy or when buying or selling all (Shift-click)</label>
-                <br>
-                <input id="IWSmelter" type="checkbox" onclick="gamePage.opts.IWSmelter = $('#IWSmelter')[0].checked;">
-                <label id="optionIWSmelter" for="IWSmelter">Smelters turn off at 95% max Iron in Iron Will mode</label>
-                <br>
-                <input id="disableTelemetry" type="checkbox" onclick="gamePage.opts.disableTelemetry = $('#disableTelemetry')[0].checked;">
-                <label id="optionDisableTelemetry" for="disableTelemetry">Disable game telemetry</label>
-                <br>
-                <input id="enableRedshift" type="checkbox" onclick="gamePage.opts.enableRedshift = $('#enableRedshift')[0].checked;">
-                <label id="optionEnableRedshift" for="enableRedshift">Enable offline progression</label>
-                <br>
-                <input id="disablePollution" type="checkbox" onclick="gamePage.opts.disablePollution = $('#disablePollution')[0].checked;">
-                <label id="optionDisablePollution" for="disablePollution">Disable pollution effects</label>
-                <br>
-                <input id="enableRedshiftGflops" type="checkbox" onclick="gamePage.opts.enableRedshiftGflops = $('#enableRedshiftGflops')[0].checked;">
-                <label id="optionEnableRedshiftGflops" for="enableRedshiftGflops">启用浮点的离线进度</label>
-                <br>
+                <div id="booleanOptionsExtra"></div>
                 <input id="batchSize" type="number" min="1" max="9999" size="4" oninput="$('#batchSize')[0].value = gamePage.opts.batchSize = Math.max(1, Math.min(9999, $('#batchSize')[0].value));">
                 <label id="optionBatchSize" for="batchSize">Batch size of Ctrl-click</label>
-                <br>
-                <input id="forceLZ" type="checkbox" onclick="gamePage.opts.forceLZ = $('#forceLZ')[0].checked;">
-                <label id="optionForceLZ" for="forceLZ" style="font-size: 75%;">Always compress in-memory save, in UTF-16 <em>(experimental)</em></label>
-                <br>
-                <input id="compressSaveFile" type="checkbox" onclick="gamePage.opts.compressSaveFile = $('#compressSaveFile')[0].checked;">
-                <label id="optionCompressSaveFile" for="compressSaveFile" style="font-size: 75%;">Compress exported save file <em>(experimental)<br>WARNING: it generates save files that are NOT COMPATIBLE with older versions.</em></label>
-                <br>
             </div>
             <br>
             <input id="exportButton" type="button" value="Export" onclick="gamePage.saveExport();">
             <input id="importButton" type="button" value="Import" onclick="$('#importData').val(''); $('#importDiv').show();" style="margin-top: 10px;">
+            <input id="exportToDropbox" type="button" value="Export to Dropbox" onclick="gamePage.saveExportDropbox();" style="margin-top: 10px;">
+            <input id="importFromDropbox" type="button" value="Import from Dropbox" onclick="gamePage.saveImportDropbox();" style="margin-top: 10px;">
             <br>
         </div>
 
         <!-- Export Dialog -->
         <div id="exportDiv" style="display: none" class="dialog help">
-            <h1>Export To:</h1>
+            <h1>Export To Dropbox/Drive/File:</h1>
             <input id="exportToSimpleFile" type="button" onclick="gamePage.saveToFile(false);" value="File (simple name)">
             <input id="exportToFullFile" type="button" onclick="gamePage.saveToFile(true);" value="File (full name)">
             <a id="download-link" target="_blank" style="display: none"></a>
             <br>
-            <span>注意：推荐导出txt传递，QQ和微信发送字母数字有长度限制</span>
-            <br>
             <h1>Text Export:</h1>
+            <div class="notice">Be careful sharing export text with other people, it can contain your personal information.</div>
             <br>
             <textarea id="exportData" style="width: 550px; height: 220px;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
             <br>
@@ -483,16 +586,68 @@
         <!-- Import Dialog -->
         <div id="importDiv" style="display: none" class="dialog help">
             <div id="importWarning">Warning! Importing data will overwrite your current game data.</div>
-            <input id="importFile" type="file" value="选择存档文件"/>
-            <input id="doFileImportButton" type="button" value="使用文件导入" onclick="readText();" style="margin-top: 10px;">
+            <input id="importFile" type="file" value="Select Save File"/>
+            <input id="doFileImportButton" type="button" value="Import File" onclick="readText();" style="margin-top: 10px;">
             <br>
-            <span>上面选择文件后点击使用文件导入，下面是粘贴存档后点击导入</span>
             <h1>Text Import:</h1>
+            <div class="notice">Be careful using save import with data from other people. Importing other people's save may affect your personal data (for example, cloud saves).</div>
             <br>
             <textarea id="importData" style="width: 550px; height: 220px;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
             <br>
             <input id="doImportButton" type="button" value="Import" onclick="gamePage.saveImport(); $('#importDiv').hide();" style="margin-top: 10px;">
             <input id="cancelButton" type="button" value="Cancel" onclick="$('#importDiv').hide();" style="margin-top: 10px;">
+        </div>
+
+        <!-- Cheats panel — see updateCheatLabels() for i18n -->
+        <div id="cheatDiv" style="display: none" class="dialog help">
+            <a class="close" href="#" onclick="$('#cheatDiv').hide();" style="position: absolute; top: 10px; right: 15px;">✕</a>
+            <h2 style="color:#c0392b; margin-top:0;" data-ci18n="cheats.title">🐱 Cheats</h2>
+            <fieldset><legend data-ci18n="cheats.resources">Resources</legend>
+                <input type="button" data-ci18n="cheats.maxall" onclick="cheat_maxAll();">
+                <input type="button" data-ci18n="cheats.catnip" onclick="cheat_addRes('catnip',1000);">
+                <input type="button" data-ci18n="cheats.wood" onclick="cheat_addRes('wood',500);">
+                <input type="button" data-ci18n="cheats.minerals" onclick="cheat_addRes('minerals',500);">
+                <input type="button" data-ci18n="cheats.kittens" onclick="cheat_addRes('kittens',10);">
+                <input type="button" data-ci18n="cheats.starchart" onclick="cheat_addRes('starchart',100);">
+                <input type="button" data-ci18n="cheats.titanium" onclick="cheat_addRes('titanium',500);">
+                <input type="button" data-ci18n="cheats.uranium" onclick="cheat_addRes('uranium',100);">
+                <input type="button" data-ci18n="cheats.unobtainium" onclick="cheat_addRes('unobtainium',100);">
+            </fieldset>
+            <fieldset><legend data-ci18n="cheats.science">Science &amp; Workshop</legend>
+                <input type="button" data-ci18n="cheats.alltechs" onclick="gamePage.science.unlockAll();">
+                <input type="button" data-ci18n="cheats.allupgrades" onclick="gamePage.workshop.unlockAll();">
+                <input type="button" data-ci18n="cheats.storage" onclick="gamePage.bld.devAddStorage();">
+                <input type="button" data-ci18n="cheats.allschemes" onclick="gamePage.unlockedSchemes=gamePage.ui.allSchemes;gamePage.ui.updateOptions();">
+            </fieldset>
+            <fieldset><legend data-ci18n="cheats.time">Time</legend>
+                <input type="button" data-ci18n="cheats.skip1y" onclick="cheat_fastForward(400);">
+                <input type="button" data-ci18n="cheats.skip10y" onclick="cheat_fastForward(4000);">
+                <input type="button" data-ci18n="cheats.skip100y" onclick="cheat_fastForward(40000);">
+                <input type="button" data-ci18n="cheats.speedup" onclick="gamePage.calendar.ticksPerDay=1/3;gamePage.msg('Calendar sped up');">
+            </fieldset>
+            <fieldset><legend data-ci18n="cheats.faith">Faith &amp; Religion</legend>
+                <input type="button" data-ci18n="cheats.maxfaith" onclick="cheat_maxRes('faith');">
+                <input type="button" data-ci18n="cheats.praise" onclick="cheat_addRes('faith',1000);">
+                <input type="button" data-ci18n="cheats.tears" onclick="cheat_addRes('tears',100);">
+                <input type="button" data-ci18n="cheats.relic" onclick="cheat_addRes('relic',100);">
+                <input type="button" data-ci18n="cheats.allreligion" onclick="gamePage.religion.unlockAll();">
+            </fieldset>
+            <fieldset><legend data-ci18n="cheats.prestige">Prestige</legend>
+                <input type="button" data-ci18n="cheats.paragon100" onclick="cheat_addRes('paragon',100);">
+                <input type="button" data-ci18n="cheats.paragon1000" onclick="cheat_addRes('paragon',1000);">
+                <input type="button" data-ci18n="cheats.karma10" onclick="cheat_addKarma(10);">
+                <input type="button" data-ci18n="cheats.burned" onclick="cheat_addRes('burnedParagon',100);">
+                <input type="button" data-ci18n="cheats.sorrow" onclick="cheat_addRes('sorrow',100);">
+            </fieldset>
+            <fieldset><legend data-ci18n="cheats.other">Other</legend>
+                <input type="button" data-ci18n="cheats.alldiplomacy" onclick="gamePage.diplomacy.unlockAll();">
+                <input type="button" data-ci18n="cheats.allachievements" onclick="gamePage.achievements.unlockAll();">
+                <input type="button" data-ci18n="cheats.allchallenges" onclick="gamePage.challenges.unlockAll();">
+                <input type="button" data-ci18n="cheats.allprestige" onclick="gamePage.prestige.unlockAll();">
+            </fieldset>
+            <div style="text-align:center; margin-top:10px;">
+                <input type="button" data-ci18n="cheats.unlockall" onclick="cheat_unlockAll();" style="background:#c0392b !important; color:white !important; font-size:14px; padding:8px 30px;">
+            </div>
         </div>
 
         <!-- Credits -->
@@ -513,88 +668,27 @@
             Thanks to mothloveslamp for supporting me and keeping me sane.<br>
             And finally, my undying gratitude to Waraiko.<br>
             <br>
-            <span style="font-size:12px;">桌面版移植基于 Electron | 原游戏版权归 bloodrizer 所有</span>
         </div>
 
         <!-- Footer -->
         <div id="footerLinks" class="links-block">
-            <a href="https://petercheney.gitee.io/baike/" target="_blank" title="猫国百科全书">百科</a> |
-            <a href="http://g8hh.com" target="_blank" title="更多好玩的放置游戏，就来锅巴汉化">锅巴汉化</a> |
-            <a href="#" onclick="$('#creditsDiv').toggle();">人员</a> |
-            <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=82FJX5M8M3GVN" target="_blank">捐赠</a> |
-            <a href="https://www.patreon.com/bloodrizer" target="_blank">支持</a>
+            <a href="https://github.com/reflectt6" target="_blank">Reverse engineered by reflectt6</a>
         </div>
     </div>
 
-    <!-- Chinese localization scripts -->
-    <link rel="stylesheet" href="chs/kf.css?v=2" type="text/css" media="screen" charset="utf-8">
-    <script src="chs/kf.js?v=3"></script>
-    <script src="chs/chs.js?v=3"></script>
-    <script src="chs/chscore.js?v=3"></script>
-
-    <script type="text/javascript">
-        // Kitten Scientists initialization
-        var enableKS = function() {
-            localStorage['zh.ks.enable'] = 'enable';
-            $("#ks-label").text("可爱的猫猫科学家为您服务");
-            $('#ks-options').show();
-        };
-
-        $("#set-ks-enable").on('change', function() {
-            if (localStorage['zh.ks.enable'] === 'enable') {
-                localStorage.setItem('zh.ks.enable', 'disable');
-                $('#toggle-engine').is(':checked') ? $('#toggle-engine').click() : false;
-                $('#ks-options').hide();
-                $("#ks-label").text("启用小猫珂学家");
-                return;
-            } else if (!localStorage['zh.ks.enable']) {
-                alert("第一次使用珂学家请点击说明书链接并参考\n\n太阳教团在附加项目里\n\n珂学家设置请根据自身实际情况调整，不能做到满足所有人\n挂机推荐工艺项目默认设置能勾平衡尽量勾平衡\n文化、钛、科学爆仓属于正常现象\n还有问题或者建议，可以在猫国群找Cheney");
-            }
-            enableKS();
-        });
-
-        // KGP resource progress bar
-        var timeKGP;
-        loadKGP = function () {
-            if (ksVision && localStorage['zh.kgp.enable'] !== 'disable' && game.timer) {
-                let srcKGP = "KGP.min.js?v=";
-                document.body.appendChild(document.createElement('script')).src = srcKGP + ksVision;
-            } else if (!timeKGP) {
-                timeKGP = setTimeout(() => loadKGP(), 500);
-            }
-        };
-
-        if (localStorage['zh.kgp.enable'] !== 'disable') {
-            $("#set-kgp-enable").attr("checked", true);
-            if (window.KGPInterval === undefined) {loadKGP();}
-        }
-        $("#set-kgp-enable").on('change', function() {
-            if (!localStorage['zh.kgp.enable'] || localStorage['zh.kgp.enable'] === 'disable') {
-                localStorage.setItem('zh.kgp.enable', 'enable');
-                $("#kgp-label").text("资源进度条已启动");
-            } else {
-                localStorage.setItem('zh.kgp.enable', 'disable');
-                $("#kgp-label").text("启用资源进度条");
-            }
-            if (window.initKGP) { initKGP(); } else { loadKGP(); }
-        });
-
+    <script>
         // Read text file for import
         function readText() {
             var file = document.getElementById("importFile").files[0];
             if (!file) { return; }
             var reader = new FileReader();
             reader.readAsText(file);
-            reader.onload = function(data) {
+            reader.onload = function (data) {
                 gamePage.saveImport(this.result);
             };
             $('#importDiv').hide();
             reader = null;
         }
-
-        function changelog() {
-            window.open('changelog.html?v=' + buildRevision);
-        };
     </script>
 </body>
 </html>

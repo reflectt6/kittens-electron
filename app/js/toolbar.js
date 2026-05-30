@@ -76,35 +76,7 @@ dojo.declare("classes.ui.Toolbar", null, {
 
 	//TODO: move all this stuff to some util class?
 	attachToolbarTooltip: function(container, icon){
-		var tooltip = dojo.byId("tooltip");
-		dojo.empty(tooltip);
-
-		dojo.connect(container, "onmouseover", this, dojo.partial(function(tooltip, event){
-			 this.game.tooltipUpdateFunc = function(){
-				tooltip.innerHTML = icon.getTooltip();
-			 };
-			 this.game.tooltipUpdateFunc();
-
-			 var target = event.originalTarget || event.toElement;
-			 var pos = $(target).offset();
-			 if (!pos){
-				 return;
-			 }
-
-			 dojo.style(tooltip, "left", pos.left + "px");
-			 dojo.style(tooltip, "top",  pos.top + "px");
-
-			 dojo.style(tooltip, "display", "");
-			 dojo.style(container, "fontWeight", "bold");
-
-	    }, tooltip));
-
-		dojo.connect(container, "onmouseout", this, dojo.partial(function(tooltip, container){
-			 this.game.tooltipUpdateFunc = null;
-			 dojo.style(tooltip, "display", "none");
-			 dojo.style(container, "fontWeight", "normal");
-		},tooltip, container));
-
+		UIUtils.attachTooltip(this.game, container, 0, 100, icon.getTooltip);
 	},
 
 	updateTooltip: function(container, tooltip, htmlProvider){
@@ -173,7 +145,7 @@ dojo.declare("classes.ui.toolbar.ToolbarHappiness", classes.ui.ToolbarIcon, {
 		for (var i = resources.length - 1; i >= 0; i--) {
 			if (resources[i].type != "common" && resources[i].value > 0){
 				resHappiness += happinessPerLuxury;
-				if(resources[i].name == "elderBox" && this.game.resPool.get("wrappingPaper").value){
+				if (resources[i].name == "elderBox" && this.game.resPool.get("wrappingPaper").value){
 					resHappiness -= happinessPerLuxury; // Present Boxes and Wrapping Paper do not stack.
 				}
 			}
@@ -199,7 +171,7 @@ dojo.declare("classes.ui.toolbar.ToolbarHappiness", classes.ui.ToolbarIcon, {
         tooltip += "* " + $I("village.happiness.penalty.base") + ": -" + this.game.getDisplayValueExt(unhappiness, false, false, 0) + "%<br>";
 		tooltip += "* " + $I("village.happiness.penalty.mitigated") + ": " + this.game.getDisplayValueExt(-unhappinessReduction, false, false, 0) + "%<br>";
 		tooltip += $I("village.happiness.environment") + ": " + this.game.getDisplayValueExt(environmentEffect, false, false, 0) + "%<br>";
-		if(challengeEffect){
+		if (challengeEffect){
 			tooltip += $I("village.happiness.challenges") + ": " + this.game.getDisplayValueExt(challengeEffect, false, false, 0) + "%<br>";
 		}
         var overpopulation = this.game.village.getKittens() - this.game.village.maxKittens;

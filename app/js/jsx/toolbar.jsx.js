@@ -24,35 +24,7 @@ WToolbarIconContainer = React.createClass({
         var getTooltip = this.props.getTooltip;
         var game = this.props.game;
 
-		var tooltip = dojo.byId("tooltip");
-		dojo.empty(tooltip);
-
-		dojo.connect(container, "onmouseover", this, function(event){
-			 game.tooltipUpdateFunc = function(){
-				tooltip.innerHTML = getTooltip();
-			 };
-			 game.tooltipUpdateFunc();
-
-			 var target = event.originalTarget || event.toElement;
-			 var pos = $(target).offset();
-			 if (!pos){
-				 return;
-			 }
-
-			 dojo.style(tooltip, "left", pos.left + "px");
-			 dojo.style(tooltip, "top",  pos.top + "px");
-
-			 dojo.style(tooltip, "display", "");
-			 dojo.style(container, "fontWeight", "bold");
-
-	    });
-
-		dojo.connect(container, "onmouseout", this, function(){
-			 game.tooltipUpdateFunc = null;
-			 dojo.style(tooltip, "display", "none");
-			 dojo.style(container, "fontWeight", "normal");
-		});
-
+        UIUtils.attachTooltip(game, container, 0, 100, getTooltip);
 	}
 })
 
@@ -78,9 +50,10 @@ WToolbarHappiness = React.createClass({
         this.game = this.props.game;    //hack
 
         var base = this.game.getEffect("happiness");
-		//var population = this.game.village.getKittens() *  2;
-		var tooltip = $I("village.happiness.base") + ": 100%<br>" +
-			   $I("village.happiness.buildings") + ": +" + (Math.floor(base)) + "%<br>";
+		var challengeHappiness = this.game.getEffect("challengeHappiness");
+		// "base" is usually 100%, but it gets reduced in certain Challenges
+		var tooltip = $I("village.happiness.base") + ": " + this.game.getDisplayValueExt(100 + challengeHappiness, false, false, 0) + "%<br>";
+		tooltip += $I("village.happiness.buildings") + ": +" + (Math.floor(base)) + "%<br>";
 
 		//----------------------
 		var resHappiness = 0;
@@ -101,9 +74,9 @@ WToolbarHappiness = React.createClass({
 		}
 		tooltip += $I("village.happiness.rare.resources") + ": +" + this.game.getDisplayValueExt(resHappiness, false, false, 0) + "%<br>";
 		//---------------------
-		var karma = this.game.resPool.get("karma");
-		if (karma.value > 0){
-			tooltip += $I("village.happiness.karma") + ": +" + this.game.getDisplayValueExt(karma.value, false, false, 0) + "%<br>";
+		var karma = this.game.village.getHappinessFromKarma();
+		if (karma > 0){
+			tooltip += $I("village.happiness.karma") + ": +" + this.game.getDisplayValueExt(karma, false, false, 0) + "%<br>";
 		}
 
 		if (this.game.calendar.festivalDays > 0){
@@ -197,7 +170,7 @@ WToolbarMOTD = React.createClass({
         var server = this.game.server;
 		if (server.showMotd && server.motdContent) {
 			server.motdFreshMessage = false;
-			return "有问题找百科或者猫国QQ群<br />" + server.motdContent;
+			return "Message of the day:<br />" + server.motdContent;
 		}
     }
 });
@@ -349,29 +322,18 @@ WLoginForm = React.createClass({
 
     render: function(){
         if (this.state.isLoading){
-            return $r("span", null, "加载中...");
+            return $r("span", null, "Loading...");
         }
         var game = this.props.game;
         if (game.server.userProfile){
-            //var userProfile = game.server.userProfile;
-            //return $r("div", {className: "userProfile"},[
-            //    $r("img", {src: "https://www.gravatar.com/avatar/" +
-            //        (userProfile.email ? md5(userProfile.email) : "n/a")
-            //    + "?s=15"}),
-            //    $r("a", {
-            //        href:"/ui/profile", target:"_blank"
-            //    }, userProfile.id)
-            //]);
             var userProfile = game.server.userProfile;
             return $r("div", {className: "userProfile"},[
-                $r("img", {src: "https://q2.qlogo.cn/headimg_dl?dst_uin=" +
-                    (userProfile.email ? userProfile.email : "n/a")
-                + "&spec=1",
-                width:"25px",
-                height:"25px"}),
+                $r("img", {src: "https://www.gravatar.com/avatar/" +
+                    (userProfile.email ? md5(userProfile.email) : "n/a")
+                + "?s=15"}),
                 $r("a", {
-                    href: "https://kittensgame.com/ui/profile", target:"_blank"
-                }, userProfile.qqName)
+                    href:"/ui/profile", target:"_blank"
+                }, userProfile.id)
             ]);
 
         }
@@ -380,14 +342,16 @@ WLoginForm = React.createClass({
             {onClick: function (e){ e.stopPropagation(); }},
             [
                 $r("div", {className: "row"}, [
-                    "邮箱:",
+                    $r("label", {for:"kgnet-email"}, "Email:"),
                         $r("input", {
+                            id:"kgnet-email",
                             type: "email",
                             onChange: this.setLogin,
                             value: this.state.login
                         } ),
-                    "密码:",
+                    $r("label", {for:"kgnet-password"}, "Password:"),
                         $r("input", {
+                            id:"kgnet-password",
                             type: "password",
                             onChange: this.setPassword,
                             value: this.state.password
@@ -397,14 +361,11 @@ WLoginForm = React.createClass({
                     $r("a", {
                         href:"#",
                         onClick: this.login
-                    }, "登录"),
+                    }, "login"),
                     $r("a", {
-                        onClick: function(e){
-                            e.stopPropagation();
-                            game.ui.showDialog("registerDiv");
-						},
-					}, "注册"),
-                    $r("span", {paddingTop:"10px"}, "存档自动存在浏览器的缓存里，不换端无需云存档")
+                        target: "_blank",
+                        href: "http://kittensgame.com/ui/register"
+                    }, "register")
                 ]),
                 this.state.error && $r("div", {className: "row"}, [
                     $r("span", {className:"error"}, this.state.error)
@@ -432,11 +393,11 @@ WLoginForm = React.createClass({
     login: function(){
         var self = this;
 
-        this.setState({isLoading: true});
+        self.setState({error: null, isLoading: true});
         $.ajax({
             cache: false,
             type: "POST",
-            // dataType: "JSON",
+            dataType: "JSON",
             data: {
                 email: this.state.login,
                 password: this.state.password
@@ -450,12 +411,11 @@ WLoginForm = React.createClass({
             if (resp.id){
                 self.props.game.server.setUserProfile(resp);
             } else {
-            	self.setState({error: $I(resp.error)})
-           		// console.error("something went wrong, resp:", resp, status)
-			}
+                self.setState({error: resp.error})
+            }
 		}).fail(function(resp, status){
             console.error("something went wrong, resp:", resp, status)
-            self.setState({error: resp.responseText})
+            self.setState({error: resp.responseText || "There was a problem connecting the server"})
         }).always(function(){
             self.setState({isLoading: false});
         });
@@ -533,33 +493,32 @@ WCloudSaveRecord = React.createClass({
             ),
             $r("div", {className:"save-record-cell"},
                 save.index ?
-                (save.index.calendar.year +"年" + "，" + save.index.calendar.day + " 天 ") :
-                "加载中.."
+                ("Year "+ save.index.calendar.year + ", day " + save.index.calendar.day) :
+                "loading..."
             ),
             $r("div", {className:"save-record-cell"},
-                new Date(save.timestamp).toLocaleDateString("zh-CN", {
+                new Date(save.timestamp).toLocaleDateString("en-US", {
                     month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', hourCycle: "h24"
                 })
             ),
             $r("div", {className:"save-record-cell"}, self.bytesToSize(save.size)),
             isActiveSave && $r("a", {
                 className: "link",
-                title: "上传你当前游戏存档到官网（会覆盖旧存档）",
+                title: "Upload your current game save to the server (this will owerwrite your old cloud save)",
                 onClick: function(e){
                     e.stopPropagation();
-                    game.ui.confirm("上传", "这会覆盖云端的存档。确定/取消", function(){
+                    game.ui.confirm("[S]ave", "This will override [SERVER] save. Y/N", function(){
                         game.server.pushSave();
                     });
                 }}, $I("ui.kgnet.save.save")),
             $r("a", {
                 className: "link",
-                title: "下载并加载云存档（你当前的存档会丢失）",
+                title: "Download a cloud save and apply it to your game (your current data will be lost)",
                 onClick: function(e){
                     e.stopPropagation();
-                    game.ui.confirm("加载", "这会覆盖本地的存档。 确定/取消", function(){
+                    game.ui.confirm("[L]oad", "This will override [LOCAL] save. Y/N", function(){
                         game.server.loadSave(save.guid);
                     });
-					game.ui.render();
                 }}, $I("ui.kgnet.save.load")),
             $r("a", {
                 className: "link",
@@ -577,7 +536,7 @@ WCloudSaveRecord = React.createClass({
                         self.setState({
                             isEditable: !self.state.isEditable
                         })
-                }}, "更名"
+                }}, "edit"
             ),
             this.state.showActions &&
                 $r("a", { onClick: function(e){
@@ -592,7 +551,7 @@ WCloudSaveRecord = React.createClass({
                         //(pushMetadata should return a new save snapshot)
                         self.forceUpdate();
                     });
-                }}, "待更新")
+                }}, "archive")  
         ]);
     }
 })
@@ -634,11 +593,11 @@ WCloudSaves = React.createClass({
             $r("div", {className:"save-record-container"},
             //header
             saveData && $r("div", {className:"save-record header"}, [
-                $r("div", {className:"save-record-cell"}, "存档ID"),
-                $r("div", {className:"save-record-cell"}, "游戏年"),
-                $r("div", {className:"save-record-cell"}, "上次更新"),
-                $r("div", {className:"save-record-cell"}, "大小"),
-                $r("div", {className:"save-record-cell"}, "存档操作")
+                $r("div", {className:"save-record-cell"}, "Id"),
+                $r("div", {className:"save-record-cell"}, "Save"),
+                $r("div", {className:"save-record-cell"}, "Last update"),
+                $r("div", {className:"save-record-cell"}, "Size"),
+                $r("div", {className:"save-record-cell"}, "Actions")
             ]),
             //body
             //TODO: externalize save record as component?
@@ -651,29 +610,24 @@ WCloudSaves = React.createClass({
                     $r("a", {onClick: function(e){
                         e.stopPropagation();
                         game.server.pushSave();
-                    }}, "创建新的存档 (" + game.telemetry.guid + ")")
+                    }}, "Create new save (" + game.telemetry.guid + ")")
                 ]),
                 $r("div", {className:"save-record"},[
                     $r("a", {
                         className: "link",
-                        title: "更新存档信息。这是安全按钮不会改变任何数据。",
+                        title: "Fetch the latest information about your cloud saves from the serer. This is a safe operation and it wont change any data.",
                         onClick: function(e){
                             e.stopPropagation();
                             self.setState({isLoading: true})
                             game.server.syncSaveData().always(function(){
                                 self.setState({isLoading: false})
-							}).fail(function(err) {
-								game.msg('获取存档信息失败，即将打开同步存档教程', "important");
-								var tempwindow = window.open();
-								tempwindow.location = 'https://petercheney.gitee.io/baike/?file=007-%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98/02-%E4%BA%91%E5%AD%98%E6%A1%A3';
-							});
+                            })
                         }
                     }, 
-                        // (this.state.isLoading && "[loading..]"),
-                        (this.state.isLoading && "[加载中..]"),
+                        (this.state.isLoading && "[loading..]"), 
                         $I("ui.kgnet.sync")
                     ),
-                    $r("span", {paddingTop:"10px"}, (saveData && saveData.length) ? $I("ui.kgnet.test") : $I("ui.kgnet.instructional")),
+                    (!saveData || !saveData.length) && $r("span", {paddingTop:"10px"}, $I("ui.kgnet.instructional"))
                 ])
             ])
         ])
@@ -697,22 +651,34 @@ WLogin = React.createClass({
         },
             $r("div",
                 {
-                    onClick: this.toggleExpanded
+                    onClick: this.toggleExpanded,
+                    onKeyDown: this.onKeyDown
                 },
                 [
-                    $r("span", {
-                        className: "kgnet-login-link status-indicator-" + (game.server.userProfile ? "online" : "offline")
-                        + (lastBackup >= 7 ? " freshMessage" : "")
-                    }, "* " + (game.server.userProfile ?
-                        $I("ui.kgnet.online") : $I("ui.kgnet.login")
-                    )),
+                    $r("a", {
+                        className: "kgnet-login-link-container",
+                        href:"#!",
+                        onClick: this.toggleExpanded,
+                    }, 
+                        $r("span", {
+                            className: "kgnet-login-link status-indicator-" + (game.server.userProfile ? "online" : "offline")
+                            + (lastBackup >= 7 ? " freshMessage" : "")
+                        }, [
+                            $r("div", {
+                                className: "svg-icon user"
+                            }),  
+                            (game.server.userProfile ?
+                            $I("ui.kgnet.online") : $I("ui.kgnet.login"))
+                        ]
+                        ),
+                    ),
                     this.state.isExpanded && $r("div", {
                         className: "login-popup button_tooltip tooltip-block"
                     },
                         $r("div", null,
                             $r("div", {className: "last-backup"}, [
                                 (lastBackup >= 7) && $r("span", {className: "hazard"}),
-                                "上次更新：", lastBackup.toFixed(1) + " 天前",
+                                "Last backup: ", lastBackup.toFixed(1) + " days ago",
                                 (lastBackup >= 7) && $r("span", {className: "hazard"})
                             ]),
                             $r(WLoginForm, {game: game}),
@@ -728,6 +694,12 @@ WLogin = React.createClass({
         this.setState({
             isExpanded: !this.state.isExpanded
         })
+    },
+
+    onKeyDown: function(e){
+        if(e.key === "Escape") {
+            this.toggleExpanded()
+        }
     }
 });
 
@@ -755,7 +727,7 @@ WToolbar = React.createClass({
             $r(WToolbarHappiness, {game: this.state.game}),
             $r(WToolbarEnergy, {game: this.state.game}),
             $r(WBLS, {game: this.state.game}),
-            $r(WToolbarMOTD, {game: this.state.game}),
+            //$r(WToolbarMOTD, {game: this.state.game}),
             $r(WLogin, {game: this.state.game})
 
         );
