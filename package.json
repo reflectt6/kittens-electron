@@ -1,0 +1,40 @@
+{
+  "name": "kittens-game-desktop",
+  "version": "1.4.9.0",
+  "description": "猫国建设者 - Kittens Game 桌面版",
+  "main": "main.js",
+  "author": "bloodrizer (原始游戏), 桌面版移植",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable",
+    "build:dir": "electron-builder --win dir"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.kittensgame.desktop",
+    "productName": "猫国建设者",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*",
+      "app/**/*.js",
+      "app/**/*.css",
+      "app/**/*.gif",
+      "app/**/*.json"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "app/res/favicon.png"
+    },
+    "portable": {
+      "artifactName": "KittensGame-${version}.exe"
+    }
+  }
+}
