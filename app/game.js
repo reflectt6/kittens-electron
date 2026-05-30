@@ -2333,7 +2333,7 @@ dojo.declare("com.nuclearunicorn.game.ui.GamePage", null, {
 	},
 
 	resetState: function(){
-		this.colorScheme = "";
+		this.colorScheme = "night";
 		this.unlockedSchemes = this.ui.defaultSchemes;
 		this.karmaKittens = 0;
 		this.karmaZebras = 0;

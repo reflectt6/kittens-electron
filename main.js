@@ -23,8 +23,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
-    minWidth: 900,
-    minHeight: 600,
+    minWidth: 650,
+    minHeight: 500,
     title: 'Kittens Game',
     icon: path.join(__dirname, 'app', 'res', 'favicon.png'),
     webPreferences: {
@@ -36,7 +36,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'app', 'index.html'));
-  mainWindow.webContents.openDevTools();  // uncomment for debugging
+  // mainWindow.webContents.openDevTools();  // uncomment for debugging
 
   mainWindow.on('close', (e) => {
     if (!isQuitting) {

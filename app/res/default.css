@@ -32,20 +32,21 @@ img.loader {
     padding: 0;
     vertical-align: baseline;
 
-    overflow: auto;
-    width: 1300px;
+    overflow: hidden;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 #topBar {
-    position:absolute;
-    top: 2px;
-    left: 0px;
-    height: 26px;
+    position: relative;
+    flex-shrink: 0;
+    height: 28px;
     width: 100%;
     border-bottom: 1px solid gray;
 
     box-shadow: 1px 0px 2px #888;
-    min-width: 1180px;
 
     display: flex;
     justify-content: space-between;
@@ -53,17 +54,14 @@ img.loader {
 }
 
 #game, #loadingContainer {
-    position:absolute;
-    bottom: 0;
-    top: 26px;
-
+    position: relative;
+    flex: 1;
     width: 100%;
-    min-width: 1180px;
-
     margin: 0 auto;
     height: auto;
-
-    white-space: nowrap;	/* to prevent log column from wrapping */
+    display: flex;
+    overflow: hidden;
+    white-space: nowrap;
 }
 
 #loadingContainer .content{
@@ -72,10 +70,9 @@ img.loader {
     justify-content: center;
     align-items: center;
     text-align: center;
-    min-height: 100vh;
-
-    margin-left: 30%;
-    margin-right: 30%;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 #game * {
@@ -83,46 +80,38 @@ img.loader {
 }
 
 #game.centered {
-    display: flex;
     justify-content: center;
 }
 
 .column {
-    min-height: 100%;
-    height: 100%;
-
-    display: inline-block;
+    min-height: 0;
     margin-top: 4px;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 #leftColumn {
-    width: 25%;
-    max-width: 400px;
-    min-width: 300px;
-    padding-left: 5px;
-    padding-right: 20px;
-
-    overflow-y: auto;
-    overflow-x: hidden;
-
-    padding-top:20px;
-
-    height: calc(100% - 20px);
-    min-height: calc(100% - 20px);
+    flex: 1 1 280px;
+    min-width: 200px;
+    padding-left: 8px;
+    padding-right: 12px;
+    padding-top: 20px;
 }
 
 #midColumn {
-    width: 630px;
+    flex: 2 1 400px;
+    min-width: 300px;
     overflow-y: auto;
     overflow-x: hidden;
     margin-top: 30px;
 }
 
 #rightColumn {
-    min-width: 250px;
-    max-width: 400px;
+    flex: 1 1 250px;
+    min-width: 200px;
     vertical-align: top;
     padding-left: 8px;
+    padding-right: 4px;
     top: 20px;
     position: relative;
 }
@@ -130,8 +119,6 @@ img.loader {
 .tabsContainer {
     padding-bottom: 15px;
     padding-top: 2px;
-    position:absolute;
-    top: 5px;
     text-align: center;
 }
 
@@ -589,6 +576,7 @@ table.craftTable tr:hover td {
     padding-right: 15px;
     font-size: 12px;
     cursor: default;
+    position: relative;
 }
 
 .toolbarIcon.happiness div {
@@ -649,41 +637,62 @@ table.craftTable tr:hover td {
 }
 
 .kgnet-login-link {
-    cursor:pointer;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: background 0.15s, color 0.15s;
 }
 
 .kgnet-login-link:hover {
-    cursor:pointer;
-    text-decoration: underline;
+    cursor: pointer;
+    text-decoration: none;
+    background: rgba(0,0,0,0.06);
+}
+
+.kgnet-login-link .svg-icon.user {
+    width: 13px;
+    height: 13px;
+    opacity: 0.7;
 }
 
 /* kgnet login form */
 .login-popup {
     position: absolute;
-    top: 20px;
-    padding: 5px;
-    background: white;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 14px 18px;
+    background: var(--page-background-color);
     z-index: 1;
 
-    margin-left: -35px;
-    font-size: 15px;
+    font-size: 14px;
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+    border: 1px solid #d5d5d5;
+    min-width: 280px;
 }
-
 
 .login-popup.button_tooltip {
 	background-color: var(--page-background-color) !important;
 }
 
 .login-popup .last-backup {
-    margin-bottom: 10px;
-    border-bottom: 1px solid gray;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #ddd;
+    font-size: 13px;
+    color: #999;
 }
 
 .login-popup .error {
     max-width: 25rem;
     display: block;
     white-space: break-spaces;
-    color: red;
+    color: #d44;
+    font-size: 13px;
 }
 
 .hazard {
@@ -699,23 +708,84 @@ table.craftTable tr:hover td {
 }
 
 .login-popup .row {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
 }
 
-.login-popup .row a, input {
-    margin-right: 10px;
+.login-popup .row label {
+    font-size: 13px;
+    min-width: 52px;
+    color: #777;
+}
+
+.login-popup .row input[type="email"],
+.login-popup .row input[type="password"],
+.login-popup .row input[type="text"] {
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 155px;
+    outline: none;
+    transition: border-color 0.15s;
+    margin-right: 0;
+}
+
+.login-popup .row input:focus {
+    border-color: #4a7dbf;
+    box-shadow: 0 0 0 2px rgba(74,125,191,0.15);
+}
+
+.login-popup .row a {
+    font-size: 13px;
+    padding: 5px 14px;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: opacity 0.15s, background 0.15s;
+    margin-right: 0;
+}
+
+.login-popup .row a:first-of-type {
+    background: #4a7dbf;
+    color: #fff;
+    font-weight: 500;
+}
+
+.login-popup .row a:first-of-type:hover {
+    opacity: 0.88;
+}
+
+.login-popup .row a:last-of-type {
+    color: #999;
+}
+
+.login-popup .row a:last-of-type:hover {
+    color: #666;
+    opacity: 1;
 }
 
 .login-popup .userProfile {
-    line-height: 15px;
+    line-height: 22px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
 }
 
 .login-popup .userProfile a {
-    vertical-align: top;
+    vertical-align: middle;
+    font-size: 14px;
+    font-weight: 500;
 }
-.login-popup .userProfile img{
+
+.login-popup .userProfile img {
     border-radius: 50%;
-    margin-right: 5px;
+    margin-right: 4px;
+    width: 24px;
+    height: 24px;
 }
 
 .tooltip-block {
@@ -1095,13 +1165,8 @@ progress[value]::-webkit-progress-value {
 /*======================================================================*/
 
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
 }
 
 ::-webkit-scrollbar-button {
@@ -1110,8 +1175,15 @@ progress[value]::-webkit-progress-value {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #d0d0d0;
+    background: #c0c0c0;
     border-radius: 40px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
+    background-clip: content-box;
 }
 
 ::-webkit-scrollbar-track {
@@ -1922,7 +1994,167 @@ span.genericWarning {
     display: flex;
 }
 
-.kgnet-login-link {
-    gap: 3px;
-    display: inline-flex;
+/* ==========================================
+   Responsive — keep 3 columns, scale down
+   ========================================== */
+
+/* Medium window: tighten side columns, smaller buttons */
+@media (max-width: 1100px) {
+    #leftColumn {
+        flex-basis: 240px;
+        min-width: 200px;
+        padding-right: 6px;
+    }
+    #rightColumn {
+        flex-basis: 220px;
+        min-width: 180px;
+        padding-left: 4px;
+    }
+    #midColumn {
+        min-width: 300px;
+    }
+    .btn.modern {
+        width: 210px;
+        font-size: 13px;
+    }
+    .btn.modern .btnContent {
+        padding: 7px 0 7px 7px;
+    }
+    .btn.modern a {
+        padding: 7px 3px 7px 3px !important;
+    }
+    .res-table {
+        max-width: 200px;
+    }
+}
+
+/* Small window: further compress, reduce spacing */
+@media (max-width: 850px) {
+    #leftColumn {
+        flex-basis: 180px;
+        min-width: 160px;
+        padding-left: 4px;
+        padding-right: 4px;
+        padding-top: 10px;
+    }
+    #rightColumn {
+        flex-basis: 180px;
+        min-width: 160px;
+        padding-left: 2px;
+        padding-right: 2px;
+        top: 10px;
+    }
+    #midColumn {
+        min-width: 250px;
+        margin-top: 15px;
+    }
+    #topBar {
+        font-size: 11px;
+    }
+    #topBar .links-block {
+        font-size: 10px;
+    }
+    #topBar .links-block a {
+        padding-left: 2px;
+        padding-right: 2px;
+    }
+    .btn.modern {
+        width: 170px;
+        font-size: 12px;
+    }
+    .btn.modern .btnContent {
+        padding: 5px 0 5px 5px;
+    }
+    .btn.modern a {
+        padding: 5px 2px 5px 2px !important;
+        min-width: 16px;
+    }
+    .res-table {
+        max-width: 160px;
+    }
+    .tabInner {
+        padding: 10px;
+        min-height: auto;
+    }
+    .tabsContainer {
+        font-size: 12px;
+        padding-bottom: 8px;
+    }
+    #footerLinks {
+        display: none;
+    }
+    .panelContainer .container {
+        padding: 6px;
+    }
+}
+
+/* Very narrow: absolute minimums, content scrolls */
+@media (max-width: 700px) {
+    #leftColumn {
+        flex-basis: 150px;
+        min-width: 140px;
+        padding-left: 2px;
+        padding-right: 2px;
+    }
+    #rightColumn {
+        flex-basis: 150px;
+        min-width: 140px;
+        padding-left: 1px;
+        padding-right: 0;
+        top: 5px;
+    }
+    #midColumn {
+        flex-basis: 220px;
+        min-width: 220px;
+        margin-top: 10px;
+    }
+    #topBar {
+        font-size: 10px;
+        height: 22px;
+        min-height: 22px;
+    }
+    #topBar .links-block {
+        font-size: 9px;
+    }
+    #topBar .links-block a {
+        padding-left: 1px;
+        padding-right: 1px;
+    }
+    #topBar .gameTitle {
+        font-size: 11px;
+    }
+    #game, #loadingContainer {
+        height: auto;
+    }
+    .btn.modern {
+        width: 140px;
+        font-size: 11px;
+    }
+    .btn.modern .btnContent {
+        padding: 4px 0 4px 4px;
+    }
+    .btn.modern a {
+        padding: 4px 2px 4px 2px !important;
+        min-width: 14px;
+    }
+    .res-table {
+        max-width: 130px;
+    }
+    .tabInner {
+        padding: 6px;
+    }
+    .tabsContainer {
+        font-size: 11px;
+        padding-bottom: 6px;
+    }
+    .panelContainer .title {
+        padding: 2px 2px 2px 6px;
+        font-size: 12px;
+    }
+    .panelContainer .container {
+        padding: 4px;
+    }
+    .btn {
+        width: 140px;
+    }
 }

@@ -769,6 +769,7 @@
     "opts.theme.grayish": "Grayish",
     "opts.theme.greenish": "Greenish",
     "opts.theme.minimalist": "Minimalist",
+    "opts.theme.night": "Night",
     "opts.theme.oil": "Oil",
     "opts.theme.oledblack": "OLED Black",
     "opts.theme.oledblack_comment": "Used for mobile",

@@ -766,7 +766,7 @@ dojo.declare("classes.ui.DesktopUI", classes.ui.UISystem, {
         var game = this.game;
 
         if (game.unlockedSchemes.indexOf(game.colorScheme) < 0) {
-            game.colorScheme = "default";
+            game.colorScheme = "night";
         }
         $("body").removeClass();
         $("body").addClass("scheme_" + game.colorScheme);

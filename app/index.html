@@ -156,7 +156,15 @@
                 if (uiSettings.theme) {
                     $("body").addClass("scheme_" + uiSettings.theme);
                     loadTheme(uiSettings.theme, now);
+                } else {
+                    // 默认使用 night 主题
+                    $("body").addClass("scheme_night");
+                    loadTheme("night", now);
                 }
+            } else {
+                // 首次运行，默认 night 主题
+                $("body").addClass("scheme_night");
+                loadTheme("night", now);
             }
 
             var def = $.getJSON("build.version.json?=" + now).then(function (json) {
@@ -444,7 +452,7 @@
 
             <div class="links-block" style="padding-top:3px; display:inline-flex;">
                 <a id="save-link" href="#" onclick="gamePage.saveUI(); saveToFile();" title="Save">Save</a> |
-                <a id="restore-link" href="#" onclick="loadFromFile();" title="Restore from backup" style="color:#2980b9;">Restore</a> |
+                <a id="restore-link" href="#" onclick="loadFromFile();" title="Restore from backup">Restore</a> |
                 <a id="options-link" href="#" onclick="$('#optionsDiv').toggle();">Options</a> |
                 <a id="reset-link" href="#" onclick="gamePage.reset();">Reset</a> |
                 <a id="wipe-link" href="#" onclick="wipe();">Wipe</a> |
@@ -672,7 +680,10 @@
 
         <!-- Footer -->
         <div id="footerLinks" class="links-block">
-            <a href="https://github.com/reflectt6" target="_blank">Reverse engineered by reflectt6</a>
+            <span class="gameTitle">猫国建造者-桌面版 </span>
+                <span style="font-size: small;">
+                    by <a href="https://github.com/reflectt6/kittens-electron" class="copyright" target="_blank">reflectt6</a>
+            </span>
         </div>
     </div>
 
