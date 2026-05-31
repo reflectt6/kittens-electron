@@ -1,8 +1,14 @@
 # 猫国建造者 桌面版
 
-网页游戏 [Kittens Game](https://kittensgame.com/)（作者 bloodrizer）的 Electron 桌面移植版。
+本项目是对网页游戏 [Kittens Game](https://kittensgame.com/)（作者 bloodrizer）的逆向分析与 Electron 桌面移植，旨在**技术交流与学习**。
 
-与原版相比，桌面版增加了**本地文件存档**功能，存档保存在电脑本地，无需担心浏览器缓存清理导致数据丢失。
+桌面版增加了**本地文件存档**功能，存档保存在电脑本地，无需担心浏览器缓存清理导致数据丢失。
+
+> ⚠️ **声明**
+>
+> 原版游戏已在 [Steam](https://store.steampowered.com/app/1097410/Kittens_Game/) 上架，请支持正版。
+>
+> 本项目仅用于 **技术交流与学习**，请勿用于商业用途。
 
 ## 下载与运行
 
