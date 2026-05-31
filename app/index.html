@@ -509,15 +509,10 @@
                     <a id="dev_boostCalendar" href="#" onclick="dev_boostCalendar();" style="display: none; text-decoration: none; position: relative; left: 5px;">&gt;&gt;&gt;</a>
                 </div>
                 <div class="right-tab-header">
-                    <a id="logLink" href="#" class="active" onclick="gamePage.ui.hideChat();">Log</a>
-                    <a id="chatLink" href="#" onclick="gamePage.ui.showChat();">Chat</a>
+                    <a id="logLink" href="#" class="active" onclick="gamePage.ui.loadLog();">Log</a>
+                    <a id="queueLink" href="#" onclick="gamePage.ui.loadQueue();">Queue</a>
                 </div>
                 <div id="observeButton"></div>
-                <div class="right-tab" id="rightTabChat" style="display:none; overflow-y: hidden;">
-                    <div class="console-intro">
-                        <iframe id="discordIframe" src="" width="320" height="360" style="border: 0; overflow: hidden;" scrolling="no"></iframe>
-                    </div>
-                </div>
                 <div class="right-tab" id="rightTabLog">
                     <div>
                         <div class="console-intro" style="padding-top: 10px; border-top: 1px solid gray;">
